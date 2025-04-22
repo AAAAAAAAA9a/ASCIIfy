@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ASCIIfy</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+
+      <section class="control-group theme-section">
+        <div class="control theme-control">
+          <label for="theme">Theme:</label>
+          <select id="theme">
+            <option value="dark" selected>Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </div>
+      </section>
+      
+      <section class="control-group upload-group">
+        <h3>1. Upload Your File</h3>
+        <div id="fileUpload">
+          <div class="drop-zone unified-drop-zone">
+            <p>Drop image or video file here or click to browse</p>
+            <input type="file" id="unifiedInput" accept="image/*,video/*" style="position: absolute; opacity: 0; width: 100%; height: 100%; top: 0; left: 0; cursor: pointer;">
+          </div>
+        </div>
+        <div id="videoControls" style="display: none;">
+          <div class="video-controls">
+            <button id="playPause">Play</button>
+            <button id="restart">Restart</button>
+            <button id="toggleLoop" class="loop-button inactive">Loop: OFF</button>
+          </div>
+        </div>
+      </section>
+      
+      <section class="control-group image-processing">
+        <h3 class="collapsible active">2. Adjustments</h3>
+        <div class="collapsible-content show">
+          <div class="control">
+            <label for="asciiWidth">Output Width (chars):</label>
+            <input type="range" id="asciiWidth" min="20" max="500" value="150">
+            <span class="value-label" id="asciiWidthVal">150</span>
+          </div>
+          <div class="control">
+            <label for="brightness">Brightness:</label>
+            <input type="range" id="brightness" min="-100" max="100" value="0">
+            <span class="value-label" id="brightnessVal">0</span>
+          </div>
+          <div class="control">
+            <label for="contrast">Contrast:</label>
+            <input type="range" id="contrast" min="-100" max="100" value="0">
+            <span class="value-label" id="contrastVal">0</span>
+          </div>
+          <div class="control">
+            <label for="blur">Blur (px):</label>
+            <input type="range" id="blur" min="0" max="10" step="0.01" value="0">
+            <span class="value-label" id="blurVal">0</span>
+          </div>
+          <div class="control">
+            <label for="zoom">Zoom (%):</label>
+            <input type="range" id="zoom" min="20" max="600" value="100">
+            <span class="value-label" id="zoomVal">100</span>
+          </div>
+          <div class="control">
+            <label for="charset">Character Set:</label>
+            <select id="charset">
+              <option value="binary" selected>Binary</option>
+              <option value="blocks">Blocks</option>
+            </select>
+          </div>
+          <div class="control">
+            <label for="enableEdgeDetection">Edge Detection:</label>
+            <input type="checkbox" id="enableEdgeDetection">
+          </div>
+          <div class="control">
+            <label for="invert">Invert Colors:</label>
+            <input type="checkbox" id="invert">
+          </div>
+          <div class="control">
+            <label for="ignoreWhite">Ignore Pure White:</label>
+            <input type="checkbox" id="ignoreWhite" checked>
+          </div>
+        </div>
+      </section>
+
+      <section class="control-group export-settings">
+        <h3 class="collapsible">3. Export Animation</h3>
+        <div class="collapsible-content">
+          <div class="control">
+            <label for="exportFPS">Frame Rate (FPS):</label>
+            <input type="number" id="exportFPS" min="1" max="60" value="30">
+          </div>
+          <div class="control">
+            <label for="exportFormat">Format:</label>
+            <select id="exportFormat">
+              <option value="json" selected>JSON</option>
+              <option value="js">JavaScript Module</option>
+            </select>
+          </div>
+          <div class="control">
+            <label for="exportMode">Export Mode:</label>
+            <select id="exportMode">
+              <option value="single" selected>Single File</option>
+              <option value="separate">Separate Files (ZIP)</option>
+            </select>
+          </div>
+          <div class="control">
+            <p class="export-note">Note: Each export captures the frames from exactly one full video playthrough. Looping is OFF by default to ensure consistent exports.</p>
+            <button id="startExport">Export Animation</button>
+            <div id="exportProgress" style="display: none;">
+              <div id="progressBar">
+                <div id="progressFill"></div>
+              </div>
+              <span id="progressText">0%</span>
+            </div>
+          </div>
+        </div>
+      </section>
+      
+      <section class="control-group import-preview">
+        <h3 class="collapsible">4. Preview Animation</h3>
+        <div class="collapsible-content">
+          <div class="control">
+            <div class="drop-zone mini-drop-zone">
+              <p>Drop JSON/JS file or click to browse</p>
+              <input type="file" id="importFile" accept=".json,.js" style="position: absolute; opacity: 0; width: 100%; height: 100%; top: 0; left: 0; cursor: pointer;">
+            </div>
+          </div>
+          <div class="control preview-controls">
+            <button id="previewAnimation" disabled>Preview</button>
+            <button id="stopPreview" disabled style="display: none;">Stop</button>
+          </div>
+        </div>
+      </section>
+      
+      <section class="control-group action-buttons-section">
+        <div class="control action-buttons">
+          <button id="reset">Reset Settings</button>
+          <button id="clearWorkspace" class="danger-button">Clear All</button>
+        </div>
+      </section>
+    </aside>
+    
+    <main class="main-content">
+      <div id="notificationArea" class="notification-area"></div>
+      <pre id="ascii-art"></pre>
+    </main>
+  </div>
+  
+  <canvas id="canvas" style="display: none;"></canvas>
+  <canvas id="videoCanvas" style="display: none;"></canvas>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="js/ascii-generator.js"></script>
+  <script src="js/ascii-exporter.js"></script>
+</body>
+</html>
