@@ -1,8 +1,3 @@
-/**
- * ASCIIfy - Export Manager Module
- * Handles exporting, importing and previewing animations
- */
-
 const ExportManager = {
   core: null,
   state: {
@@ -14,13 +9,14 @@ const ExportManager = {
     loopPreviewEl: null,
     asciiArtEl: null,
     exportInProgress: false,
-    importedAnimation: null
+    importedAnimation: null,
+    previewImportedButtonEl: null,
+    stopImportedPreviewButtonEl: null
   },
   
   init(coreModule) {
     this.core = coreModule;
     
-    // Get DOM references
     this.state.previewButtonEl = document.getElementById('previewAnimation');
     this.state.stopPreviewButtonEl = document.getElementById('stopPreview');
     this.state.loopPreviewEl = document.getElementById('loopPreview');
@@ -29,13 +25,19 @@ const ExportManager = {
     this.state.exportProgressEl = document.getElementById('exportProgress');
     this.state.progressFillEl = document.getElementById('progressFill');
     this.state.progressTextEl = document.getElementById('progressText');
-    
-    // Set up event listeners
+
+    // Add support for imported animation preview buttons
+    this.state.previewImportedButtonEl = document.getElementById('previewImportedAnimation');
+    this.state.stopImportedPreviewButtonEl = document.getElementById('stopImportedPreview');
+
     this.state.exportButtonEl?.addEventListener('click', this.startExport.bind(this));
     this.state.previewButtonEl?.addEventListener('click', this.startPreview.bind(this));
     this.state.stopPreviewButtonEl?.addEventListener('click', this.stopPreview.bind(this));
-    
-    // Set up import functionality
+
+    // Add event listeners for imported animation preview
+    this.state.previewImportedButtonEl?.addEventListener('click', this.startImportedPreview.bind(this));
+    this.state.stopImportedPreviewButtonEl?.addEventListener('click', this.stopImportedPreview.bind(this));
+
     this.setupImport();
   },
   
@@ -87,7 +89,6 @@ const ExportManager = {
     }
     
     const reader = new FileReader();
-    
     reader.onload = (e) => {
       try {
         let animationData;
@@ -107,13 +108,11 @@ const ExportManager = {
         if (!animationData || !Array.isArray(animationData.frames) || !animationData.fps) {
           throw new Error('Invalid animation file format');
         }
-        
         this.state.importedAnimation = animationData;
-        
-        this.state.previewButtonEl.disabled = false;
-        
+        // Enable imported preview button
+        if (this.state.previewImportedButtonEl) this.state.previewImportedButtonEl.disabled = false;
+        if (this.state.stopImportedPreviewButtonEl) this.state.stopImportedPreviewButtonEl.disabled = false;
         document.getElementById('exportFPS').value = animationData.fps;
-        
         this.core.showMessage(`Animation loaded successfully: ${animationData.frames.length} frames at ${animationData.fps} FPS`, 'success');
       } catch (err) {
         this.core.showMessage('Error loading animation file: ' + err.message, 'error');
@@ -128,21 +127,28 @@ const ExportManager = {
   },
   
   previewProcessedFrames(sourceFrames, fps) {
-    // Process frames the same way as they would be during export
-    // This ensures preview matches export exactly
-    const hasMetadata = sourceFrames.length > 0 && typeof sourceFrames[0] === 'object' && sourceFrames[0].content !== undefined;
-    
-    let processedFrames = [...sourceFrames];
-    if (hasMetadata) {
-      // Sort frames by timestamp if available to ensure proper sequence
-      processedFrames = processedFrames.sort((a, b) => a.timestamp - b.timestamp);
+    if (!sourceFrames || sourceFrames.length === 0) {
+      return [];
     }
     
-    // Apply frame rate adjustment
-    const adjustedFrames = this.adjustFramesByFps(processedFrames, fps);
+    const hasMetadata = typeof sourceFrames[0] === 'object' && sourceFrames[0].content !== undefined;
     
-    // Return only valid frames
-    return adjustedFrames.filter(frame => typeof frame === 'string' && frame.trim() !== '');
+    if (hasMetadata) {
+      const sortedFrames = [...sourceFrames].sort((a, b) => {
+        const timeDiff = a.timestamp - b.timestamp;
+        return timeDiff === 0 ? 0 : timeDiff;
+      });
+      
+      const adjustedFrames = this.adjustFramesByFps(sortedFrames, fps);
+      
+      return adjustedFrames.filter(frame => {
+        return typeof frame === 'string' && frame.length > 0;
+      });
+    } else {
+      const adjustedFrames = this.adjustFramesByFps([...sourceFrames], fps);
+      
+      return adjustedFrames.filter(frame => typeof frame === 'string' && frame.length > 0);
+    }
   },
   
   startPreview() {
@@ -151,7 +157,6 @@ const ExportManager = {
       return;
     }
     
-    // Show processing message
     this.core.updateStatusMessage(`Processing frames for preview...`);
     
     let frames = null;
@@ -163,7 +168,6 @@ const ExportManager = {
     } else if (this.core.state.frames && this.core.state.frames.length > 0) {
       fps = parseInt(document.getElementById('exportFPS').value, 10) || 30;
       
-      // Process frames using the same method as export
       frames = this.previewProcessedFrames(this.core.state.frames, fps);
     }
     
@@ -207,13 +211,10 @@ const ExportManager = {
         this.state.previewFrame = this.state.previewFrame + 1;
         
         if (this.state.previewFrame >= frames.length) {
-          // Check if looping is enabled
           if (this.state.loopPreviewEl && this.state.loopPreviewEl.checked) {
-            // Reset to beginning for looping
             this.state.previewFrame = 0;
             this.core.updateStatusMessage(`Animation preview: looping (${frames.length} frames at ${fps} FPS)`);
           } else {
-            // Stop if looping is disabled
             this.stopPreview();
             this.core.updateStatusMessage('Preview complete - click Preview to replay');
             return;
@@ -271,7 +272,6 @@ const ExportManager = {
       return;
     }
     
-    // Stop any ongoing captures or previews
     if (this.core.state.isPlaying && CaptureEngine) {
       CaptureEngine.stopCapture();
     }
@@ -287,7 +287,6 @@ const ExportManager = {
     const fps = parseInt(document.getElementById('exportFPS').value, 10) || 30;
     const format = document.getElementById('exportFormat').value;
     
-    // Use exportFrames for exporting instead of preview frames
     const frames = [...this.core.state.exportFrames];
     
     if (!frames || frames.length === 0) {
@@ -308,121 +307,179 @@ const ExportManager = {
   },
   
   finalizeExport(fps, format, frames) {
-    // Step 1: Preprocessing - 25%
+    if (!frames || frames.length === 0) {
+      this.core.showMessage('Error: No frames to export', 'error');
+      this.state.exportProgressEl.style.display = 'none';
+      this.state.exportButtonEl.disabled = false;
+      this.state.exportInProgress = false;
+      return;
+    }
+    
     this.state.progressFillEl.style.width = '25%';
     this.state.progressTextEl.textContent = `Step 1/4: Preprocessing ${frames.length} frames...`;
     
-    // Check if we're working with the new frame format (with metadata)
-    const hasMetadata = frames.length > 0 && typeof frames[0] === 'object' && frames[0].content !== undefined;
+    const hasMetadata = typeof frames[0] === 'object' && frames[0].content !== undefined;
     
+    const useWebWorker = typeof Worker !== 'undefined' && frames.length > 500;
     let processedFrames = frames;
-    setTimeout(() => {
-      if (hasMetadata) {
-        // Sort frames by timestamp if available to ensure proper sequence
-        processedFrames = [...frames].sort((a, b) => a.timestamp - b.timestamp);
-      }
-      
-      // Step 2: Adjusting frames - 50%
-      this.state.progressFillEl.style.width = '50%';
-      this.state.progressTextEl.textContent = `Step 2/4: Adjusting frames for target FPS (${fps})...`;
-      
-      setTimeout(() => {
-        // Adjust frames for the target FPS
-        const adjustedFrames = this.adjustFramesByFps(processedFrames, fps);
-        
-        // Validate frames
-        const validFrames = adjustedFrames.filter(frame => typeof frame === 'string' && frame.trim() !== '');
-        
-        if (validFrames.length === 0) {
-          this.core.showMessage('Error: No valid frames to export', 'error');
-          this.state.exportProgressEl.style.display = 'none';
-          this.state.exportButtonEl.disabled = false;
-          this.state.exportInProgress = false;
-          return;
+    
+    const preprocessFrames = () => {
+      return new Promise((resolve) => {
+        if (hasMetadata) {
+          processedFrames = [...frames].sort((a, b) => {
+            const timeDiff = a.timestamp - b.timestamp;
+            return timeDiff === 0 ? 0 : timeDiff;
+          });
         }
         
-        if (validFrames.length !== adjustedFrames.length) {
-          this.core.showMessage(`Warning: Removed ${adjustedFrames.length - validFrames.length} invalid frames`, 'warning', 5000);
+        this.state.progressFillEl.style.width = '50%';
+        this.state.progressTextEl.textContent = `Step 2/4: Adjusting frames for target FPS (${fps})...`;
+        
+        setTimeout(() => resolve(), 50);
+      });
+    };
+    
+    const adjustFrameRates = () => {
+      return new Promise((resolve) => {
+        const processInChunks = (processedFrames.length > 1000);
+        
+        if (processInChunks) {
+          const chunkSize = 500;
+          let adjustedFrames = [];
+          
+          const processChunk = (startIdx) => {
+            const endIdx = Math.min(startIdx + chunkSize, processedFrames.length);
+            const chunk = processedFrames.slice(startIdx, endIdx);
+            
+            const processedChunk = this.adjustFramesByFps(chunk, fps);
+            
+            const validChunk = processedChunk.filter(frame => typeof frame === 'string' && frame.trim() !== '');
+            adjustedFrames = adjustedFrames.concat(validChunk);
+            
+            const progressPercent = 50 + Math.round((endIdx / processedFrames.length) * 25);
+            this.state.progressFillEl.style.width = `${progressPercent}%`;
+            this.state.progressTextEl.textContent = `Step 2/4: Adjusting frames for target FPS (${fps}) - processed ${endIdx}/${processedFrames.length}`;
+            
+            if (endIdx < processedFrames.length) {
+              setTimeout(() => processChunk(endIdx), 0);
+            } else {
+              resolve(adjustedFrames);
+            }
+          };
+          
+          processChunk(0);
+        } else {
+          const adjustedFrames = this.adjustFramesByFps(processedFrames, fps);
+          
+          const validFrames = adjustedFrames.filter(frame => typeof frame === 'string' && frame.trim() !== '');
+          
+          resolve(validFrames);
+        }
+      });
+    };
+    
+    const prepareExportData = (validFrames) => {
+      return new Promise((resolve, reject) => {
+        try {
+          if (validFrames.length === 0) {
+            throw new Error('No valid frames to export');
+          }
+          
+          this.state.progressFillEl.style.width = '75%';
+          this.state.progressTextEl.textContent = `Step 3/4: Formatting ${validFrames.length} frames for export...`;
+          
+          const exportData = {
+            width: this.core.state.frameWidth || 150,
+            height: this.core.state.frameHeight || 50,
+            fps: fps,
+            loop: true,
+            frames: validFrames,
+            created: new Date().toISOString(),
+            generatorVersion: '1.2',
+            frameCount: validFrames.length,
+            duration: validFrames.length / fps
+          };
+          
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+          const fileType = this.core.state.currentFileType || 'ascii';
+          
+          setTimeout(() => resolve({ exportData, validFrames, timestamp, fileType }), 50);
+        } catch (err) {
+          reject(err);
+        }
+      });
+    };
+    
+    const createExportFile = ({ exportData, validFrames, timestamp, fileType }) => {
+      this.state.progressFillEl.style.width = '90%';
+      this.state.progressTextEl.textContent = `Step 4/4: Creating output file...`;
+      
+      const exportMode = document.getElementById('exportMode').value;
+      
+      if (exportMode === 'separate') {
+        this.exportFramesAsZip(validFrames, fps, format, timestamp, fileType);
+      } else {
+        let exportContent, mimeType, extension;
+        
+        if (format === 'json') {
+          exportContent = JSON.stringify(exportData);
+          mimeType = 'application/json';
+          extension = 'json';
+        } else {
+          exportContent = `export default ${JSON.stringify(exportData)};`;
+          mimeType = 'text/javascript';
+          extension = 'js';
         }
         
-        // Step 3: Formatting data - 75%
-        this.state.progressFillEl.style.width = '75%';
-        this.state.progressTextEl.textContent = `Step 3/4: Formatting ${validFrames.length} frames for export...`;
+        const filename = `ascii-animation-${fileType}-${timestamp}.${extension}`;
+        
+        const blob = new Blob([exportContent], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        this.downloadFile(url, filename);
+        
+        this.core.showMessage(`Successfully exported ${validFrames.length} frames at ${fps} FPS`, 'success');
+        
+        this.state.progressFillEl.style.width = '100%';
+        this.state.progressTextEl.textContent = `Export complete!`;
         
         setTimeout(() => {
-          try {
-            const exportData = {
-              width: this.core.state.frameWidth || 150,
-              height: this.core.state.frameHeight || 50,
-              fps: fps,
-              loop: true,
-              frames: validFrames,
-              created: new Date().toISOString(),
-              generatorVersion: '1.2',
-              frameCount: validFrames.length,
-              duration: validFrames.length / fps
-            };
-            
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            const fileType = this.core.state.currentFileType || 'ascii';
-            
-            // Step 4: Creating output file - 90%
-            this.state.progressFillEl.style.width = '90%';
-            this.state.progressTextEl.textContent = `Step 4/4: Creating output file...`;
-            
-            setTimeout(() => {
-              const exportMode = document.getElementById('exportMode').value;        
-              if (exportMode === 'separate') {
-                this.exportFramesAsZip(validFrames, fps, format, timestamp, fileType);
-              } else {
-                let exportContent, mimeType, extension;
-                
-                if (format === 'json') {
-                  exportContent = JSON.stringify(exportData);
-                  mimeType = 'application/json';
-                  extension = 'json';
-                } else {
-                  exportContent = `export default ${JSON.stringify(exportData)};`;
-                  mimeType = 'text/javascript';
-                  extension = 'js';
-                }
-                
-                const filename = `ascii-animation-${fileType}-${timestamp}.${extension}`;
-                
-                const blob = new Blob([exportContent], { type: mimeType });
-                const url = URL.createObjectURL(blob);
-                this.downloadFile(url, filename);
-                
-                this.core.showMessage(`Successfully exported ${validFrames.length} frames at ${fps} FPS`, 'success');
-                
-                // Complete - 100%
-                this.state.progressFillEl.style.width = '100%';
-                this.state.progressTextEl.textContent = `Export complete!`;
-                
-                setTimeout(() => {
-                  URL.revokeObjectURL(url);
-                  setTimeout(() => {
-                    this.state.exportProgressEl.style.display = 'none';
-                    this.state.exportButtonEl.disabled = false;
-                    this.state.exportInProgress = false;
-                  }, 500);
-                }, 300);
-              }
-            }, 200);
-          } catch (err) {
-            console.error('Export error:', err);
-            this.core.showMessage('Export failed: ' + err.message, 'error');
-            
+          URL.revokeObjectURL(url);
+          setTimeout(() => {
             this.state.exportProgressEl.style.display = 'none';
             this.state.exportButtonEl.disabled = false;
             this.state.exportInProgress = false;
-          }
-        }, 200);
-      }, 200);
-    }, 200);
+            
+            exportContent = null;
+            
+            if (window.gc) window.gc();
+          }, 500);
+        }, 300);
+      }
+    };
+    
+    preprocessFrames()
+      .then(adjustFrameRates)
+      .then(prepareExportData)
+      .then(createExportFile)
+      .catch(err => {
+        console.error('Export error:', err);
+        this.core.showMessage('Export failed: ' + err.message, 'error');
+        
+        this.state.exportProgressEl.style.display = 'none';
+        this.state.exportButtonEl.disabled = false;
+        this.state.exportInProgress = false;
+      });
   },
   
   exportFramesAsZip(frames, fps, format, timestamp, fileType) {
+    if (typeof JSZip === 'undefined') {
+      this.core.showMessage('JSZip library not loaded. ZIP export failed.', 'error');
+      this.state.exportProgressEl.style.display = 'none';
+      this.state.exportButtonEl.disabled = false;
+      this.state.exportInProgress = false;
+      return;
+    }
+    
     const zip = new JSZip();
     
     const metadata = {
@@ -485,46 +542,35 @@ const ExportManager = {
   },
   
   adjustFramesByFps(frames, targetFps) {
-    // If no frames are available or invalid targetFps, return original frames
     if (!frames || !frames.length || !targetFps || targetFps <= 0) {
       console.warn('Invalid frames or targetFps provided to adjustFramesByFps');
       return frames;
     }
     
-    // Check if frames have timestamp information (from the new frame capture format)
     const hasMetadata = frames.length > 0 && typeof frames[0] === 'object' && frames[0].content !== undefined;
     
-    // For small frame counts, return as is
     if (frames.length <= 5) {
       console.log(`Too few frames (${frames.length}) to adjust for FPS`);
       return hasMetadata ? frames.map(frame => frame.content) : frames;
     }
     
     const smoothLoopTransition = (frames) => {
-      // Only apply if we have metadata with frameType
       if (!hasMetadata || !frames[0].frameType) return frames;
       
-      // Find the first and last frames
       const firstFrames = frames.filter(f => f.frameType === "first");
       const lastFrames = frames.filter(f => f.frameType === "last");
       
       if (firstFrames.length === 0 || lastFrames.length === 0) return frames;
       
-      // Get the first and last frames
       const firstFrame = firstFrames[0];
       const lastFrames_sorted = [...lastFrames].sort((a, b) => b.position - a.position);
-      const lastFrame = lastFrames_sorted[0]; // Get the frame closest to the end
-
-      // Check if the last frame and first frame are different
-      // If they're the same or very similar, remove the duplicate
+      const lastFrame = lastFrames_sorted[0];
+      
       const isLastFrameRedundant = frames.length > 10 && lastFrame.position > 0.95;
       
       if (isLastFrameRedundant) {
-        // Find the index of the last frame
         const lastFrameIndex = frames.findIndex(f => f === lastFrame);
         
-        // Instead of adding a transition frame, remove the last frame if it's too similar to first
-        // This prevents the "duplicate first frame" issue at the end of animations
         if (lastFrameIndex !== -1) {
           console.log('Removed redundant last frame for smoother loop transition');
           frames.splice(lastFrameIndex, 1);
@@ -534,11 +580,8 @@ const ExportManager = {
       return frames;
     };
     
-    // Apply smooth transitions if needed
     let processedFrames = hasMetadata ? smoothLoopTransition([...frames]) : frames;
     
-    // Calculate the proper number of frames for the target FPS
-    // We use the actual duration if available from the timestamps
     let duration = 0;
     
     if (hasMetadata && processedFrames[0].timestamp !== undefined) {
@@ -546,63 +589,133 @@ const ExportManager = {
       const lastFrame = processedFrames[processedFrames.length - 1].timestamp;
       duration = lastFrame - firstFrame;
       
-      // If duration is very short or zero (can happen with loop detection),
-      // use the video duration from the last frame position instead
       if (duration < 0.1 && processedFrames[processedFrames.length - 1].position) {
         const lastPosition = processedFrames[processedFrames.length - 1].position;
         if (lastPosition > 0) {
-          // Estimate video duration based on the last frame position
           duration = processedFrames[processedFrames.length - 1].timestamp / lastPosition;
         }
       }
     } else {
-      // Estimate duration based on standard 30fps
       duration = processedFrames.length / 30;
     }
     
-    // Calculate the exact number of frames needed for the target FPS
     const newLength = Math.max(2, Math.round(duration * targetFps));
     
     this.state.progressTextEl.textContent = `Adjusting ${frames.length} frames to ${newLength} frames at ${targetFps} FPS...`;
     
-    // If minimal change, return original frame content
     if (Math.abs(newLength - processedFrames.length) < 5) {
       console.log('Frame count is close to target, using original frames');
       return hasMetadata ? processedFrames.map(frame => frame.content) : processedFrames;
     }
     
-    const adjustedFrames = [];
+    let adjustedFrames = new Array(newLength);
     
-    // Interpolate frames evenly across the duration
+    let timestampLookup;
+    if (hasMetadata) {
+      timestampLookup = processedFrames.map(frame => frame.timestamp);
+    }
+    
+    const findClosestFrameIndex = (targetTime) => {
+      let low = 0;
+      let high = timestampLookup.length - 1;
+      
+      if (targetTime <= timestampLookup[low]) return low;
+      if (targetTime >= timestampLookup[high]) return high;
+      
+      while (low <= high) {
+        const mid = Math.floor((low + high) / 2);
+        
+        if (targetTime === timestampLookup[mid]) return mid;
+        
+        if (targetTime < timestampLookup[mid]) {
+          if (mid > 0 && targetTime > timestampLookup[mid - 1]) {
+            return (timestampLookup[mid] - targetTime) < (targetTime - timestampLookup[mid - 1]) ? 
+                   mid : mid - 1;
+          }
+          high = mid - 1;
+        } else {
+          if (mid < timestampLookup.length - 1 && targetTime < timestampLookup[mid + 1]) {
+            return (targetTime - timestampLookup[mid]) < (timestampLookup[mid + 1] - targetTime) ? 
+                   mid : mid + 1;
+          }
+          low = mid + 1;
+        }
+      }
+      
+      return low;
+    };
+    
     for (let i = 0; i < newLength; i++) {
-      // Calculate the exact position in the source frames array
       const position = i / (newLength - 1);
       let index;
       
       if (hasMetadata) {
-        // Use timestamp information for more accurate frame selection
         const targetTime = position * duration;
-        // Find the frame with the closest timestamp
-        index = 0;
-        let closestDiff = Number.MAX_VALUE;
-        
-        for (let j = 0; j < processedFrames.length; j++) {
-          const diff = Math.abs(processedFrames[j].timestamp - targetTime);
-          if (diff < closestDiff) {
-            closestDiff = diff;
-            index = j;
-          }
-        }
+        index = findClosestFrameIndex(targetTime);
       } else {
-        // Simple position-based selection if no metadata
         index = Math.min(Math.floor(position * (processedFrames.length - 1)), processedFrames.length - 1);
       }
       
-      const frame = hasMetadata ? processedFrames[index].content : processedFrames[index];
-      adjustedFrames.push(frame);
+      adjustedFrames[i] = hasMetadata ? processedFrames[index].content : processedFrames[index];
     }
     
     console.log(`Frame adjustment complete: ${frames.length} → ${adjustedFrames.length}`);
     return adjustedFrames;
+  },
+
+  // Add logic for previewing imported animation
+  startImportedPreview() {
+    if (!this.state.importedAnimation) {
+      this.core.showMessage('No imported animation loaded.', 'error');
+      return;
+    }
+    if (this.state.isPreviewPlaying) {
+      this.stopImportedPreview();
+      return;
+    }
+    const frames = this.state.importedAnimation.frames;
+    const fps = this.state.importedAnimation.fps;
+    if (!frames || frames.length === 0) {
+      this.core.showMessage('No frames in imported animation.', 'error');
+      return;
+    }
+    const frameInterval = 1000 / fps;
+    this.state.asciiArtEl.textContent = '';
+    this.state.previewImportedButtonEl.disabled = true;
+    this.state.stopImportedPreviewButtonEl.disabled = false;
+    this.state.stopImportedPreviewButtonEl.style.display = 'inline-block';
+    this.state.isPreviewPlaying = true;
+    this.state.previewFrame = 0;
+    let lastFrameTime = 0;
+    const animate = (timestamp) => {
+      if (!this.state.isPreviewPlaying) return;
+      if (!lastFrameTime || timestamp - lastFrameTime >= frameInterval) {
+        lastFrameTime = timestamp;
+        this.state.asciiArtEl.textContent = frames[this.state.previewFrame];
+        this.state.previewFrame = this.state.previewFrame + 1;
+        if (this.state.previewFrame >= frames.length) {
+          this.stopImportedPreview();
+          this.core.updateStatusMessage('Imported preview complete - click Preview to replay');
+          return;
+        }
+      }
+      this.state.previewInterval = requestAnimationFrame(animate);
+    };
+    this.state.previewInterval = requestAnimationFrame(animate);
+    this.core.showMessage(`Previewing imported animation: ${frames.length} frames at ${fps} FPS`, 'info', 2000);
+  },
+
+  stopImportedPreview() {
+    if (this.state.previewInterval) {
+      cancelAnimationFrame(this.state.previewInterval);
+      this.state.previewInterval = null;
+    }
+    this.state.isPreviewPlaying = false;
+    if (this.state.previewImportedButtonEl) this.state.previewImportedButtonEl.disabled = false;
+    if (this.state.stopImportedPreviewButtonEl) this.state.stopImportedPreviewButtonEl.disabled = true;
+    if (this.state.stopImportedPreviewButtonEl) this.state.stopImportedPreviewButtonEl.style.display = 'none';
+    if (this.core.state.currentMedia) {
+      MediaProcessor.processMedia(this.core.state.currentMedia);
+    }
   }
 };

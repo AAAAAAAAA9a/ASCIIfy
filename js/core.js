@@ -1,8 +1,3 @@
-/**
- * ASCIIfy - Core Module
- * Central module containing shared state and initialization
- */
-
 const ASCIIfy = {
   state: {
     currentMedia: null,
@@ -12,8 +7,8 @@ const ASCIIfy = {
     isPlaying: false,
     isPreviewPlaying: false,
     currentFileType: null,
-    frames: [],             // For live preview frames
-    exportFrames: [],       // For frames that will be exported
+    frames: [],
+    exportFrames: [],
     frameWidth: 0,
     frameHeight: 0,
     maxProcessingWidth: 500,
@@ -24,19 +19,17 @@ const ASCIIfy = {
     originalCtx: null,
     previewInterval: null,
     theme: 'dark',
-    hasExportCapture: false // Flag to indicate if export frames have been captured
+    hasExportCapture: false
   },
 
   init() {
-    // Initialize core components
     this.setupCanvases();
-    this.setupNotifications();    // Initialize other modules
+    this.setupNotifications();
     if (MediaProcessor) MediaProcessor.init(this);
     if (UIManager) UIManager.init(this);
     if (CaptureEngine) CaptureEngine.init(this);
     if (ExportManager) ExportManager.init(this);
     
-    // Apply default theme
     const storedTheme = localStorage.getItem('asciiTheme');
     if (storedTheme) {
       this.setTheme(storedTheme);
@@ -44,7 +37,6 @@ const ASCIIfy = {
   },
 
   setupCanvases() {
-    // Set up canvas elements used across modules
     this.state.videoCanvas = document.getElementById('videoCanvas') || document.createElement('canvas');
     if (!this.state.videoCanvas.id) {
       this.state.videoCanvas.id = 'videoCanvas';
@@ -102,7 +94,6 @@ const ASCIIfy = {
   
   clearWorkspace() {
     if (confirm('Clear everything and start fresh?')) {
-      // Stop any ongoing captures or previews
       if (this.state.isPlaying && CaptureEngine) {
         CaptureEngine.stopCapture();
       }
@@ -115,10 +106,8 @@ const ASCIIfy = {
         ExportManager.stopPreview();
       }
       
-      // Reset settings
       UIManager.resetSettings();
       
-      // Clear media and frames
       this.cleanupMedia();
       this.state.frames = [];
       this.state.exportFrames = [];
@@ -126,7 +115,6 @@ const ASCIIfy = {
       this.state.currentMedia = null;
       this.state.currentFileType = null;
       
-      // Clear UI
       document.getElementById('ascii-art').textContent = "";
       this.updateStatusMessage("Workspace cleared. Please upload an image or video to begin.");
       
@@ -138,7 +126,6 @@ const ASCIIfy = {
       document.getElementById('videoControls').style.display = 'none';
       document.getElementById('startExport').disabled = true;
       
-      // Reset status indicators
       if (CaptureEngine) {
         const captureStatus = document.getElementById('captureStatus');
         const exportStatus = document.getElementById('exportStatus');
@@ -156,7 +143,6 @@ const ASCIIfy = {
         }
       }
       
-      // Clear preview in export manager
       if (ExportManager) {
         ExportManager.clearPreview();
       }
@@ -164,55 +150,108 @@ const ASCIIfy = {
   },
   
   cleanupVideoResources() {
-    // Complete video resource cleanup function
     if (this.state.video) {
-      // Stop playback
-      this.state.video.pause();
-      this.state.video.removeAttribute('src');
-      this.state.video.load();
-      this.state.isPlaying = false;
+      try {
+        this.state.video.pause();
+        this.state.video.currentTime = 0;
+        this.state.video.removeAttribute('src');
+        this.state.video.load();
+        
+        if (this.state.video.srcObject) {
+          try {
+            const tracks = this.state.video.srcObject.getTracks();
+            tracks.forEach(track => track.stop());
+            this.state.video.srcObject = null;
+          } catch (err) {
+            console.warn('Error cleaning up video tracks:', err);
+          }
+        }
+        
+        this.state.isPlaying = false;
+        this.state.isPreviewPlaying = false;
+      } catch (err) {
+        console.warn('Error during video element cleanup:', err);
+      }
     }
     
-    // Cancel any pending animation frames
     if (this.state.animationFrame) {
       cancelAnimationFrame(this.state.animationFrame);
       this.state.animationFrame = null;
     }
     
-    // Revoke any object URLs to prevent memory leaks
+    if (CaptureEngine && CaptureEngine.state.previewAnimationFrame) {
+      cancelAnimationFrame(CaptureEngine.state.previewAnimationFrame);
+      CaptureEngine.state.previewAnimationFrame = null;
+    }
+    
+    if (ExportManager && ExportManager.state.previewInterval) {
+      cancelAnimationFrame(ExportManager.state.previewInterval);
+      ExportManager.state.previewInterval = null;
+    }
+    
     if (this.state.videoObjectURL) {
-      URL.revokeObjectURL(this.state.videoObjectURL);
-      this.state.videoObjectURL = null;
+      try {
+        URL.revokeObjectURL(this.state.videoObjectURL);
+        this.state.videoObjectURL = null;
+      } catch (err) {
+        console.warn('Error revoking object URL:', err);
+      }
     }
     
-    // Clear video canvas if exists
-    if (this.state.videoContext && this.state.videoCanvas) {
-      this.state.videoContext.clearRect(0, 0, this.state.videoCanvas.width, this.state.videoCanvas.height);
+    const canvasesToClear = [
+      { ctx: this.state.videoContext, canvas: this.state.videoCanvas },
+      { ctx: this.state.tempCtx, canvas: this.state.tempCanvas },
+      { ctx: this.state.originalCtx, canvas: this.state.originalCanvas }
+    ];
+    
+    canvasesToClear.forEach(item => {
+      if (item.ctx && item.canvas) {
+        try {
+          item.ctx.clearRect(0, 0, item.canvas.width, item.canvas.height);
+        } catch (err) {
+          console.warn('Error clearing canvas:', err);
+        }
+      }
+    });
+    
+    if (CaptureEngine) {
+      if (CaptureEngine.state.isCapturing) {
+        CaptureEngine.stopCapture();
+      }
+      if (CaptureEngine.state.isPreviewPlaying) {
+        CaptureEngine.stopPreview();
+      }
     }
     
-    // Stop any ongoing captures
-    if (CaptureEngine && CaptureEngine.state.isCapturing) {
-      CaptureEngine.stopCapture();
+    if (ExportManager && ExportManager.state.isPreviewPlaying) {
+      ExportManager.stopPreview();
     }
     
-    // Cancel any pending timeouts
-    if (this._cleanupTimeout) {
-      clearTimeout(this._cleanupTimeout);
-      this._cleanupTimeout = null;
-    }
+    const timeoutsToCancel = ['_cleanupTimeout', '_processingTimeout', '_previewTimeout'];
+    timeoutsToCancel.forEach(timeoutName => {
+      if (this[timeoutName]) {
+        clearTimeout(this[timeoutName]);
+        this[timeoutName] = null;
+      }
+    });
     
-    // Hide video controls
     const videoControls = document.getElementById('videoControls');
     if (videoControls) {
       videoControls.style.display = 'none';
     }
+    
+    if (window.gc) window.gc();
+    
+    if (MediaProcessor && MediaProcessor.charCache) {
+      MediaProcessor.charCache.clear();
+    }
+    
+    console.log('Video resources cleaned up successfully');
   },
   
   cleanupMedia() {
-    // Call the comprehensive cleanup function
     this.cleanupVideoResources();
   }
 };
 
-// Initialize on window load
 window.addEventListener('load', () => ASCIIfy.init());

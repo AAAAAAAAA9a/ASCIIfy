@@ -1,8 +1,3 @@
-/**
- * ASCIIfy - Capture Engine Module
- * Handles video/animation capture functionality
- */
-
 const CaptureEngine = {
   core: null,
   state: {
@@ -27,7 +22,6 @@ const CaptureEngine = {
   init(coreModule) {
     this.core = coreModule;
     
-    // Get DOM references
     this.state.captureProgressFill = document.getElementById('captureProgressFill');
     this.state.captureProgressText = document.getElementById('captureProgressText');
     this.state.frameCounter = document.getElementById('frameCounter');
@@ -37,7 +31,6 @@ const CaptureEngine = {
     this.state.exportStatusEl = document.getElementById('exportStatus');
     this.state.exportStatusIndicator = this.state.exportStatusEl?.querySelector('.status-indicator');
     
-    // Set up event listeners for capture
     const captureBtn = document.getElementById('captureAnimation');
     const stopCaptureBtn = document.getElementById('stopCapture');
     
@@ -49,7 +42,6 @@ const CaptureEngine = {
       stopCaptureBtn.addEventListener('click', () => this.stopCapture());
     }
     
-    // Set up event listeners for preview
     const playPreviewBtn = document.getElementById('playPreview');
     const stopPreviewBtn = document.getElementById('stopPreview');
     
@@ -61,10 +53,8 @@ const CaptureEngine = {
       stopPreviewBtn.addEventListener('click', () => this.stopPreview());
     }
     
-    // Set up FPS change event listener
     const fpsInput = document.getElementById('exportFPS');
     if (fpsInput) {
-      // Listen for both input (while sliding/typing) and change (when finalized)
       ['input', 'change'].forEach(eventType => {
         fpsInput.addEventListener(eventType, () => {
           if (this.core.state.video && this.core.state.currentFileType === 'video') {
@@ -74,7 +64,6 @@ const CaptureEngine = {
       });
     }
     
-    // Setup clear export frames button
     const clearExportFramesBtn = document.getElementById('clearExportFrames');
     if (clearExportFramesBtn) {
       clearExportFramesBtn.addEventListener('click', () => this.clearExportFrames());
@@ -82,14 +71,11 @@ const CaptureEngine = {
   },
 
   updateFrameCountAndProgress() {
-    // Calculate frame count based on FPS and video duration
     const fps = parseInt(document.getElementById('exportFPS').value, 10) || 30;
     const video = this.core.state.video;
     if (!video) return;
     const duration = video.duration || 0;
-    // Always include first and last frame
     const frameCount = duration > 0 ? Math.max(2, Math.round(duration * fps) + 1) : 0;
-    // Update UI
     if (this.state.frameCounter) {
       this.state.frameCounter.textContent = `${frameCount} frames`;
     }
@@ -101,7 +87,7 @@ const CaptureEngine = {
     }
   },
 
-    startPreview() {
+  startPreview() {
     if (!this.core.state.video || this.core.state.currentFileType !== 'video') {
       this.core.showMessage('No video loaded. Please upload a video first.', 'error');
       return;
@@ -112,28 +98,23 @@ const CaptureEngine = {
       return;
     }
     
-    // Stop capture if in progress
     if (this.core.state.isPlaying) {
       this.stopCapture();
     }
     
-    // Update UI
     const playBtn = document.getElementById('playPreview');
     const stopBtn = document.getElementById('stopPreview');
     
     playBtn.style.display = 'none';
     stopBtn.style.display = 'block';
     
-    // Check if looping is enabled
     const loopElement = document.getElementById('previewLoop');
     const shouldLoop = loopElement ? loopElement.checked : true;
     
-    // Set video properties
     this.core.state.video.currentTime = 0;
     this.core.state.video.loop = shouldLoop;
     this.core.state.video.muted = true;
     
-    // Start preview process
     this.core.state.isPreviewPlaying = true;
     
     this.core.showMessage('Playing live preview. Adjust settings to see changes in real-time.', 'info', 3000);
@@ -155,26 +136,46 @@ const CaptureEngine = {
     if (!this.core.state.video || !this.core.state.isPreviewPlaying) return;
     
     const video = this.core.state.video;
+    const asciiArtElement = document.getElementById('ascii-art');
+    
+    if (!video.readyState >= 2) {
+      this.state.previewAnimationFrame = requestAnimationFrame((ts) => this.previewVideoFrames(ts));
+      return;
+    }
     
     if (video.paused || video.ended) {
-      // If video has ended and no looping
       if ((video.ended && !video.loop) || video.paused) {
         this.stopPreview();
         return;
       }
     }
     
-    // Process current frame for display
+    const now = timestamp || performance.now(); 
+    if (this._lastPreviewRender && now - this._lastPreviewRender < 16) {
+      this.state.previewAnimationFrame = requestAnimationFrame((ts) => this.previewVideoFrames(ts));
+      return;
+    }
+    this._lastPreviewRender = now;
+    
     const ctx = this.core.state.videoContext;
     const canvas = this.core.state.videoCanvas;
+    
+    if (!ctx || !canvas || !asciiArtElement) {
+      this.state.previewAnimationFrame = requestAnimationFrame((ts) => this.previewVideoFrames(ts));
+      return;
+    }
+    
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const asciiFrame = MediaProcessor.processFrame(imageData);
-    document.getElementById('ascii-art').textContent = asciiFrame;
     
-    // Request next frame
+    const asciiFrame = MediaProcessor.processFrame(imageData);
+    
+    if (asciiFrame && asciiFrame.length > 0) {
+      asciiArtElement.textContent = asciiFrame;
+    }
+    
     this.state.previewAnimationFrame = requestAnimationFrame((ts) => this.previewVideoFrames(ts));
   },
   
@@ -192,7 +193,6 @@ const CaptureEngine = {
       this.core.state.video.pause();
     }
     
-    // Update UI
     const playBtn = document.getElementById('playPreview');
     const stopBtn = document.getElementById('stopPreview');
     
@@ -213,20 +213,16 @@ const CaptureEngine = {
       return;
     }
     
-    // Stop preview if running
     if (this.core.state.isPreviewPlaying) {
       this.stopPreview();
     }
     
-    // Reset export frames array before capturing
     this.core.state.exportFrames = [];
     this.state.captureStartTime = Date.now();
     
-    // Reset loop detection state
     this.state.lastCaptureTime = 0;
     this.state.loopDetected = false;
     
-    // Update UI
     const captureBtn = document.getElementById('captureAnimation');
     const stopCaptureBtn = document.getElementById('stopCapture');
     const progressContainer = document.getElementById('captureProgress');
@@ -237,17 +233,14 @@ const CaptureEngine = {
     this.state.frameCounter.textContent = '0 frames';
     this.state.durationCounter.textContent = '0.0s';
     
-    // Update status indicators
     if (this.state.captureStatusIndicator) {
       this.state.captureStatusIndicator.className = 'status-indicator recording';
       this.state.captureStatus.querySelector('span').textContent = 'Capturing frames for export...';
     }
     
-    // Set video to start
     this.core.state.video.currentTime = 0;
-    this.core.state.video.loop = false; // Always capture exactly one loop
+    this.core.state.video.loop = false;
     
-    // Start capture process
     this.core.state.isPlaying = true;
     
     const captureMessage = 'Capturing frames for export. Will automatically stop after one complete playthrough.';
@@ -265,44 +258,87 @@ const CaptureEngine = {
         this.resetCaptureUI();
       });
   },
-    captureVideoFrames(timestamp) {
+  
+  captureVideoFrames(timestamp) {
     if (!this.core.state.video || !this.core.state.isPlaying) return;
 
     const video = this.core.state.video;
 
+    if (!video.readyState >= 2) {
+      this.state.animationFrame = requestAnimationFrame((ts) => this.captureVideoFrames(ts));
+      return;
+    }
+
+    const MAX_FRAMES = 3000;
+    if (this.core.state.exportFrames.length >= MAX_FRAMES) {
+      this.core.state.isPlaying = false;
+      const duration = ((Date.now() - this.state.captureStartTime) / 1000).toFixed(1);
+      this.core.showMessage(`Maximum frame limit (${MAX_FRAMES}) reached. Stopping capture.`, 'warning');
+      this.finalizeCaptureAndUpdateUI(MAX_FRAMES, duration);
+      return;
+    }
+
     if (video.paused || video.ended) {
-      if (this.core.state.isPlaying) {
-        if (video.ended) {
-          // Video has ended naturally - complete the capture
-          this.core.state.isPlaying = false;
-          
-          const capturedFrames = this.core.state.exportFrames.length;
-          const duration = ((Date.now() - this.state.captureStartTime) / 1000).toFixed(1);
-          
-          this.finalizeCaptureAndUpdateUI(capturedFrames, duration);
-          return;
-        }
+      if (this.core.state.isPlaying && video.ended) {
+        this.core.state.isPlaying = false;
+        
+        const capturedFrames = this.core.state.exportFrames.length;
+        const duration = ((Date.now() - this.state.captureStartTime) / 1000).toFixed(1);
+        
+        this.finalizeCaptureAndUpdateUI(capturedFrames, duration);
+        return;
       }
       return;
     }
     
-    // Get target FPS from the export settings
-    const exportFPS = parseInt(document.getElementById('exportFPS').value, 10) || 30;
-    // Calculate time between frames based on desired FPS
-    const targetFrameInterval = 1000 / exportFPS;
-    
-    // Only capture a frame if enough time has passed since the last frame
-    if (!timestamp || timestamp - this.state.lastFrameTime >= targetFrameInterval) {
-      this.state.lastFrameTime = timestamp;
+    if (!this._cachedFPS) {
+      this._cachedFPS = parseInt(document.getElementById('exportFPS').value, 10) || 30;
+      this._targetFrameInterval = 1000 / this._cachedFPS;
       
-      // Store the current time for loop detection
+      if (video.duration) {
+        const expectedFrames = Math.ceil(video.duration * this._cachedFPS);
+        this._exportFrameIndex = 0;
+        
+        if (!this.core.state.exportFrames.length) {
+          this.core.state.exportFrames = new Array(Math.min(expectedFrames, MAX_FRAMES));
+        }
+      }
+    }
+    
+    const elapsed = timestamp - (this.state.lastFrameTime || 0);
+    if (!this.state.lastFrameTime || elapsed >= this._targetFrameInterval) {
+      const timeDrift = elapsed % this._targetFrameInterval;
+      this.state.lastFrameTime = timestamp - timeDrift;
+      
       this.state.lastCaptureTime = video.currentTime;
       
-      // Capture the current frame (true = for export)
+      const isNearEnd = video.duration > 0 && 
+                        video.currentTime > 0 && 
+                        (video.currentTime / video.duration) > 0.95;
+      
       this.captureCurrentFrame(true);
       
-      // Update progress UI
-      this.updateCaptureProgress();
+      if (this._exportFrameIndex % 3 === 0) {
+        this.updateCaptureProgress();
+      }
+      
+      this._exportFrameIndex++;
+      
+      if (this._exportFrameIndex > 1000 && this._exportFrameIndex % 500 === 0) {
+        if (window.gc) window.gc();
+        
+        if (window.performance && window.performance.memory) {
+          const memoryInfo = window.performance.memory;
+          const thresholdMB = 1500;
+          
+          if (memoryInfo.usedJSHeapSize > thresholdMB * 1024 * 1024) {
+            console.warn('Memory usage high. Stopping capture to prevent crash.');
+            this.core.showMessage('Memory usage high. Stopping capture to prevent crash.', 'warning');
+            this.stopCapture();
+            return;
+          }
+        }
+      }
     }
 
     if (this.core.state.isPlaying) {
@@ -314,10 +350,8 @@ const CaptureEngine = {
     this.resetCaptureUI();
     
     if (capturedFrames > 0) {
-      // Set export frames available flag
       this.core.state.hasExportCapture = true;
       
-      // Update export status
       if (this.state.exportStatusEl) {
         const statusIndicator = this.state.exportStatusIndicator;
         const statusText = this.state.exportStatusEl.querySelector('span');
@@ -326,10 +360,8 @@ const CaptureEngine = {
         if (statusText) statusText.textContent = `${capturedFrames} frames captured for export (${duration}s)`;
       }
       
-      // Enable export button
       document.getElementById('startExport').disabled = false;
       
-      // Update capture status to "ready to export"
       if (this.state.captureStatusIndicator) {
         this.state.captureStatusIndicator.className = 'status-indicator ready';
         this.state.captureStatus.querySelector('span').textContent = 'Capture complete - ready for export';
@@ -349,67 +381,93 @@ const CaptureEngine = {
   captureCurrentFrame(forExport = false) {
     const ctx = this.core.state.videoContext;
     const canvas = this.core.state.videoCanvas;
+    const asciiArtElement = document.getElementById('ascii-art');
+    
+    if (!ctx || !canvas || !this.core.state.video) return null;
+    
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(this.core.state.video, 0, 0, canvas.width, canvas.height);
     
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     
     const video = this.core.state.video;
-    const position = video.currentTime / video.duration;
     const duration = video.duration || 0;
-    const asciiFrame = MediaProcessor.processFrame(imageData);
-    document.getElementById('ascii-art').textContent = asciiFrame;
     
-    // Determine if this is the first or last frame for potential loop transition smoothing
+    if (duration <= 0) return null;
+    
+    const position = video.currentTime / duration;
+    
+    const asciiFrame = MediaProcessor.processFrame(imageData);
+    
+    if (asciiArtElement) {
+      asciiArtElement.textContent = asciiFrame;
+    }
+    
     let frameType = "normal";
+    
     if ((forExport && this.core.state.exportFrames.length === 0) || 
         (!forExport && this.core.state.frames.length === 0)) {
       frameType = "first";
-    } else if (position > 0.95) {
-      // Identify frames near the end of the animation
+    } 
+    else if (position > 0.95 || (duration > 0 && (duration - video.currentTime) < 0.1)) {
       frameType = "last";
     }
     
-    // Store enhanced frame metadata with timestamp and frame type for better export accuracy
     const frameData = {
       content: asciiFrame,
       timestamp: video.currentTime,
       position: position,
-      frameType: frameType
+      frameType: frameType,
+      captureTime: Date.now()
     };
     
-    // Store frame in appropriate array
-    const exportFPS = parseInt(document.getElementById('exportFPS').value, 10) || 30;
+    const exportFPS = parseInt(document.getElementById('exportFPS')?.value, 10) || 30;
     const maxFrames = Math.min(3000, Math.round(duration * exportFPS) + 1);
     
     if (forExport) {
-      // Store in export frames if capturing for export
       if (this.core.state.exportFrames.length < maxFrames) {
-        this.core.state.exportFrames.push(frameData);
+        if (asciiFrame && asciiFrame.length > 0) {
+          this.core.state.exportFrames.push(frameData);
+        }
       }
     } else {
-      // Store in preview frames array
       if (this.core.state.frames.length < maxFrames) {
-        this.core.state.frames.push(frameData);
+        if (asciiFrame && asciiFrame.length > 0) {
+          this.core.state.frames.push(frameData);
+        }
       }
     }
+    
+    return frameData;
   },
   
   updateCaptureProgress() {
     if (!this.core.state.video) return;
     
     const video = this.core.state.video;
-    const position = video.currentTime / video.duration;
+    const duration = video.duration || 1;
+    const currentTime = video.currentTime || 0;
+    const position = currentTime / duration;
     const progressPercent = (position * 100).toFixed(0);
     
-    // Update captured frame count
     const capturedFrames = this.core.state.exportFrames.length;
-    const fps = parseInt(document.getElementById('exportFPS').value, 10) || 30;
+    const fps = parseInt(document.getElementById('exportFPS')?.value, 10) || 30;
     
-    this.state.frameCounter.textContent = `${capturedFrames} frames`;
-    this.state.durationCounter.textContent = `${video.currentTime.toFixed(1)}s / ${video.duration.toFixed(1)}s`;
-    this.state.captureProgressFill.style.width = `${progressPercent}%`;
-    this.state.captureProgressText.textContent = `${progressPercent}%`;
+    if (this.state.frameCounter) {
+      this.state.frameCounter.textContent = `${capturedFrames} frames`;
+    }
+    
+    if (this.state.durationCounter) {
+      this.state.durationCounter.textContent = `${currentTime.toFixed(1)}s / ${duration.toFixed(1)}s`;
+    }
+    
+    if (this.state.captureProgressFill) {
+      this.state.captureProgressFill.style.width = `${progressPercent}%`;
+    }
+    
+    if (this.state.captureProgressText) {
+      this.state.captureProgressText.textContent = `${progressPercent}%`;
+    }
   },
   
   stopCapture() {
@@ -431,7 +489,6 @@ const CaptureEngine = {
     
     this.finalizeCaptureAndUpdateUI(capturedFrames, duration);
     
-    // Process the current frame to show it in the UI
     if (this.core.state.currentMedia) {
       MediaProcessor.processMedia(this.core.state.currentMedia);
     }
@@ -441,10 +498,8 @@ const CaptureEngine = {
     this.core.state.exportFrames = [];
     this.core.state.hasExportCapture = false;
     
-    // Update UI
     document.getElementById('startExport').disabled = true;
     
-    // Update export status
     if (this.state.exportStatusEl) {
       const statusIndicator = this.state.exportStatusIndicator;
       const statusText = this.state.exportStatusEl.querySelector('span');
@@ -453,7 +508,6 @@ const CaptureEngine = {
       if (statusText) statusText.textContent = 'No animation captured for export yet';
     }
     
-    // Update capture status
     if (this.state.captureStatusIndicator) {
       this.state.captureStatusIndicator.className = 'status-indicator';
       this.state.captureStatus.querySelector('span').textContent = 'Ready to capture';

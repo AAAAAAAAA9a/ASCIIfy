@@ -33,7 +33,7 @@ body {
   align-items: center;
   justify-content: center;
   border: 2px solid #444;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4); /* Enhanced shadow */
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
   opacity: 0.2;
 }
 
@@ -51,7 +51,7 @@ body {
   border-left: 4px solid #888;
   opacity: 1;
   min-height: 24px;
-  transition: none; /* No fading for persistent messages */
+  transition: none;
 }
 
 .notification-area.info {

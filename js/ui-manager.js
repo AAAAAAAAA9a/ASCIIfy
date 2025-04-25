@@ -1,8 +1,3 @@
-/**
- * ASCIIfy - UI Manager Module
- * Handles UI elements, controls, and user interaction
- */
-
 const UIManager = {
   core: null,
   
@@ -21,8 +16,7 @@ const UIManager = {
     
     const zoomInput = document.getElementById('zoom');
     if (zoomInput) {
-      // Initial zoom setup - only happens on first load
-      const initialZoom = 100; // Default fixed zoom value
+      const initialZoom = 100;
       zoomInput.value = initialZoom;
       
       const zoomVal = document.getElementById('zoomVal');
@@ -30,13 +24,10 @@ const UIManager = {
         zoomVal.textContent = zoomInput.value;
       }
       
-      // Apply the zoom to the ASCII art
       this.applyZoom(initialZoom);
     }
     
-    // Only listen for window resize, not ASCII width changes
     window.addEventListener('resize', () => {
-      // Just reapply the current zoom on resize, don't auto-calculate
       const currentZoom = parseInt(document.getElementById('zoom').value, 10);
       this.applyZoom(currentZoom);
     });
@@ -96,7 +87,6 @@ const UIManager = {
   },
   
   setupControls() {
-    // Theme toggle
     const themeSelector = document.getElementById('theme');
     if (themeSelector) {
       themeSelector.addEventListener('change', () => {
@@ -104,7 +94,6 @@ const UIManager = {
       });
     }
     
-    // Control event listeners
     const controls = ['asciiWidth', 'brightness', 'contrast', 'blur', 'invert', 'ignoreWhite', 'zoom'];
     controls.forEach(id => {
       const element = document.getElementById(id);
@@ -113,7 +102,6 @@ const UIManager = {
       }
     });
     
-    // Edge detection toggle
     const edgeToggle = document.getElementById('enableEdgeDetection');
     if (edgeToggle) {
       edgeToggle.addEventListener('change', () => {
@@ -123,7 +111,6 @@ const UIManager = {
       });
     }
     
-    // Character set selection
     const charsetSelect = document.getElementById('charset');
     if (charsetSelect) {
       charsetSelect.addEventListener('change', () => {
@@ -133,9 +120,14 @@ const UIManager = {
       });
     }
     
-    // Reset and clear buttons
+    
     document.getElementById('reset')?.addEventListener('click', () => this.resetSettings());
     document.getElementById('clearWorkspace')?.addEventListener('click', () => this.core.clearWorkspace());
+    
+    const previewImportedBtn = document.getElementById('previewImportedAnimation');
+    const stopImportedPreviewBtn = document.getElementById('stopImportedPreview');
+    if (previewImportedBtn) previewImportedBtn.disabled = !ExportManager?.state?.importedAnimation;
+    if (stopImportedPreviewBtn) stopImportedPreviewBtn.disabled = true;
   },
   
   setupCollapsibleSections() {
@@ -161,21 +153,17 @@ const UIManager = {
   },
   
   updateSettings() {
-    // Update control value displays
     document.getElementById('asciiWidthVal').textContent = document.getElementById('asciiWidth').value;
     document.getElementById('brightnessVal').textContent = document.getElementById('brightness').value;
     document.getElementById('contrastVal').textContent = document.getElementById('contrast').value;
     document.getElementById('blurVal').textContent = document.getElementById('blur').value;
     document.getElementById('zoomVal').textContent = document.getElementById('zoom').value;
     
-    // Apply zoom setting
     const zoomPercent = parseInt(document.getElementById('zoom').value, 10);
     this.applyZoom(zoomPercent);
     
-    // Provide visual feedback about settings impact
     this.updateSettingsImpactIndicators();
     
-    // Schedule processing update with a short delay
     clearTimeout(this._updateTimer);
     this._updateTimer = setTimeout(() => {
       if (this.core.state.currentMedia) {
@@ -187,12 +175,8 @@ const UIManager = {
   },
   
   updateSettingsImpactIndicators() {
-    // Get all the current settings
     const settings = this.getSettings();
     
-    // Update indicators for settings that have a strong impact on final output
-    
-    // Brightness indicator
     const brightnessVal = document.getElementById('brightnessVal');
     if (brightnessVal) {
       if (Math.abs(settings.brightness) > 50) {
@@ -204,7 +188,6 @@ const UIManager = {
       }
     }
     
-    // Contrast indicator
     const contrastVal = document.getElementById('contrastVal');
     if (contrastVal) {
       if (Math.abs(settings.contrast) > 50) {
@@ -216,7 +199,6 @@ const UIManager = {
       }
     }
     
-    // ASCII width indicator (affects detail level)
     const asciiWidthVal = document.getElementById('asciiWidthVal');
     if (asciiWidthVal) {
       if (settings.width > 300) {
@@ -231,7 +213,6 @@ const UIManager = {
       }
     }
     
-    // Update FPS indicator
     const exportFPS = parseInt(document.getElementById('exportFPS').value, 10) || 30;
     const fpsInput = document.getElementById('exportFPS');
     if (fpsInput) {
@@ -283,12 +264,10 @@ const UIManager = {
       existingIndicator.remove();
     }
     
-    // Create new indicator
     const indicator = document.createElement('div');
     indicator.className = `file-type-indicator ${type}`;
     indicator.textContent = type.charAt(0).toUpperCase() + type.slice(1) + (details ? `: ${details}` : '');
     
-    // Add to drop zone
     const dropZone = document.querySelector('.unified-drop-zone');
     if (dropZone) {
       dropZone.appendChild(indicator);
