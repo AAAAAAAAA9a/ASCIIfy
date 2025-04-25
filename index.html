@@ -29,21 +29,32 @@
           </div>
         </div>        <div id="videoControls" style="display: none;">
           <div class="video-controls">
-            <button id="captureAnimation" class="primary-button">Capture Animation</button>
-            <button id="stopCapture" style="display: none;">Stop Capture</button>
-            <div id="captureProgress" class="progress-container" style="display: none;">
-              <div class="progress-bar">
-                <div id="captureProgressFill" class="progress-fill"></div>
+            <div class="preview-controls">
+              <button id="playPreview" class="primary-button">Play Preview</button>
+              <button id="stopPreview" style="display: none;">Stop Preview</button>
+              <div class="control loop-control">
+                <input type="checkbox" id="previewLoop" checked>
+                <label for="previewLoop">Loop Preview</label>
               </div>
-              <span id="captureProgressText">0%</span>
             </div>
-            <div class="capture-info">
-              <span id="frameCounter">0 frames</span>
-              <span id="durationCounter">0.0s</span>
-            </div>
-            <div class="control loop-control">
-              <input type="checkbox" id="loopCapture" checked>
-              <label for="loopCapture">Loop Animation</label>
+            
+            <div class="capture-controls">
+              <button id="captureAnimation" class="action-button">Capture For Export</button>
+              <button id="stopCapture" style="display: none;">Stop Capture</button>
+              <div id="captureProgress" class="progress-container" style="display: none;">
+                <div class="progress-bar">
+                  <div id="captureProgressFill" class="progress-fill"></div>
+                </div>
+                <span id="captureProgressText">0%</span>
+              </div>
+              <div class="capture-info">
+                <span id="frameCounter">0 frames</span>
+                <span id="durationCounter">0.0s</span>
+              </div>
+              <div class="capture-status" id="captureStatus">
+                <div class="status-indicator"></div>
+                <span>Ready to capture</span>
+              </div>
             </div>
           </div>
         </div>
@@ -53,7 +64,10 @@
         <h3 class="collapsible active">2. Adjustments</h3>
         <div class="collapsible-content show">
           <div class="control">
-            <label for="asciiWidth">Output Width (chars):</label>
+            <label for="asciiWidth" class="tooltip-container">
+              Output Width (chars):
+              <span class="tooltip">Controls the number of characters per line. Higher values increase detail and file size.</span>
+            </label>
             <input type="range" id="asciiWidth" min="20" max="500" value="150">
             <span class="value-label" id="asciiWidthVal">150</span>
           </div>
@@ -73,8 +87,11 @@
             <span class="value-label" id="blurVal">0</span>
           </div>
           <div class="control">
-            <label for="zoom">Zoom (%):</label>
-            <input type="range" id="zoom" min="20" max="600" value="100">
+            <label for="zoom" class="tooltip-container">
+              Zoom (%):
+              <span class="tooltip">Changes the display size on screen only. Does not affect export file.</span>
+            </label>
+            <input type="range" id="zoom" min="5" max="200" value="100">
             <span class="value-label" id="zoomVal">100</span>
           </div>
           <div class="control">
@@ -96,7 +113,10 @@
             <input type="checkbox" id="ignoreWhite" checked>
           </div>
           <div class="control">
-            <label for="exportFPS">Frame Rate (FPS):</label>
+            <label for="exportFPS" class="tooltip-container">
+              Frame Rate (FPS):
+              <span class="tooltip">Controls animation speed in exported file. Higher values create smoother animations but larger files.</span>
+            </label>
             <input type="number" id="exportFPS" min="1" max="60" value="30">
           </div>
         </div>
@@ -104,6 +124,12 @@
         <h3 class="collapsible">3. Export Animation</h3>
         <div class="collapsible-content">
           <div class="export-controls-container">
+            <!-- Export Status Section -->
+            <div class="export-status" id="exportStatus">
+              <div class="status-indicator empty"></div>
+              <span>No animation captured for export yet</span>
+            </div>
+            
             <!-- Export Settings Section -->
             <div class="export-config">
               <h4>Export Settings</h4>
@@ -123,8 +149,8 @@
                 </select>
               </div>
               <div class="control">
-                <p class="export-note">Note: Each export captures the frames from exactly one full video playthrough.</p>
-                <button id="startExport">Export Animation</button>
+                <p class="export-note">Note: Only the frames captured for export will be included in the final file.</p>
+                <button id="startExport" disabled>Export Animation</button>
                 <div id="exportProgress" style="display: none;">
                   <div id="progressBar">
                     <div id="progressFill"></div>
@@ -134,9 +160,9 @@
               </div>
             </div>
 
-            <!-- Preview Section -->
-            <div class="preview-section">
-              <h4>Preview Animation</h4>
+            <!-- Import Section -->
+            <div class="import-section">
+              <h4>Import Animation</h4>
               <div class="control">
                 <div class="drop-zone mini-drop-zone">
                   <p>Drop JSON/JS file or click to browse</p>
@@ -144,12 +170,8 @@
                 </div>
               </div>
               <div class="control preview-controls">
-                <button id="previewAnimation" disabled>Preview</button>
-                <button id="stopPreview" disabled style="display: none;">Stop</button>
-                <div class="control loop-control">
-                  <input type="checkbox" id="loopPreview" checked>
-                  <label for="loopPreview">Loop Animation</label>
-                </div>
+                <button id="previewImportedAnimation" disabled>Preview Imported</button>
+                <button id="stopImportedPreview" disabled style="display: none;">Stop</button>
               </div>
             </div>
           </div>
@@ -159,7 +181,15 @@
       <section class="control-group action-buttons-section">
         <div class="control action-buttons">
           <button id="reset">Reset Settings</button>
+          <button id="clearExportFrames">Clear Export Frames</button>
           <button id="clearWorkspace" class="danger-button">Clear All</button>
+        </div>
+        <div class="control action-description">
+          <p class="action-note">
+            <span><strong>Reset Settings:</strong> Restores default settings, keeps media and captured frames</span>
+            <span><strong>Clear Export Frames:</strong> Removes captured animation frames while keeping the uploaded video</span>
+            <span><strong>Clear All:</strong> Removes uploaded media, captured frames, and resets all settings</span>
+          </p>
         </div>
       </section>
     </aside>

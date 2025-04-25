@@ -79,12 +79,18 @@ const MediaProcessor = {
       this.core.state.video = video;
       this.core.state.currentMedia = video;
       
-      this.core.showMessage('Video loaded. Click "Capture Animation" to begin recording frames.', 'success');
+      this.core.showMessage('Video loaded. Live preview will start automatically.', 'success');
       
       UIManager.updateFileTypeIndicator('video', `${video.videoWidth}x${video.videoHeight}, ${video.duration.toFixed(1)}s`);
+      
       // Update frame count and progress bar on load
       if (CaptureEngine && CaptureEngine.updateFrameCountAndProgress) {
         setTimeout(() => CaptureEngine.updateFrameCountAndProgress(), 100);
+      }
+      
+      // Start automatic preview
+      if (CaptureEngine && CaptureEngine.startPreview) {
+        setTimeout(() => CaptureEngine.startPreview(), 300);
       }
     });
     

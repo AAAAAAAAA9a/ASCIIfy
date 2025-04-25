@@ -172,6 +172,9 @@ const UIManager = {
     const zoomPercent = parseInt(document.getElementById('zoom').value, 10);
     this.applyZoom(zoomPercent);
     
+    // Provide visual feedback about settings impact
+    this.updateSettingsImpactIndicators();
+    
     // Schedule processing update with a short delay
     clearTimeout(this._updateTimer);
     this._updateTimer = setTimeout(() => {
@@ -181,6 +184,68 @@ const UIManager = {
         }
       }
     }, 100);
+  },
+  
+  updateSettingsImpactIndicators() {
+    // Get all the current settings
+    const settings = this.getSettings();
+    
+    // Update indicators for settings that have a strong impact on final output
+    
+    // Brightness indicator
+    const brightnessVal = document.getElementById('brightnessVal');
+    if (brightnessVal) {
+      if (Math.abs(settings.brightness) > 50) {
+        brightnessVal.className = 'value-label high-impact';
+      } else if (Math.abs(settings.brightness) > 20) {
+        brightnessVal.className = 'value-label medium-impact';
+      } else {
+        brightnessVal.className = 'value-label';
+      }
+    }
+    
+    // Contrast indicator
+    const contrastVal = document.getElementById('contrastVal');
+    if (contrastVal) {
+      if (Math.abs(settings.contrast) > 50) {
+        contrastVal.className = 'value-label high-impact';
+      } else if (Math.abs(settings.contrast) > 20) {
+        contrastVal.className = 'value-label medium-impact';
+      } else {
+        contrastVal.className = 'value-label';
+      }
+    }
+    
+    // ASCII width indicator (affects detail level)
+    const asciiWidthVal = document.getElementById('asciiWidthVal');
+    if (asciiWidthVal) {
+      if (settings.width > 300) {
+        asciiWidthVal.title = 'High detail, larger file size';
+        asciiWidthVal.className = 'value-label high-detail';
+      } else if (settings.width < 80) {
+        asciiWidthVal.title = 'Low detail, smaller file size';
+        asciiWidthVal.className = 'value-label low-detail';
+      } else {
+        asciiWidthVal.title = 'Moderate detail';
+        asciiWidthVal.className = 'value-label medium-detail';
+      }
+    }
+    
+    // Update FPS indicator
+    const exportFPS = parseInt(document.getElementById('exportFPS').value, 10) || 30;
+    const fpsInput = document.getElementById('exportFPS');
+    if (fpsInput) {
+      if (exportFPS > 40) {
+        fpsInput.title = 'High FPS - smoother animation but larger file size';
+        fpsInput.className = 'high-fps';
+      } else if (exportFPS < 15) {
+        fpsInput.title = 'Low FPS - smaller file size but choppier animation';
+        fpsInput.className = 'low-fps';
+      } else {
+        fpsInput.title = 'Standard FPS';
+        fpsInput.className = '';
+      }
+    }
   },
   
   resetSettings() {
