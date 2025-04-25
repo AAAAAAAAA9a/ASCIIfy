@@ -101,11 +101,6 @@ body {
   border-bottom: 1px solid #2a2a2a; /* Subtle separator between groups */
 }
 
-/* Remove border from last control group */
-.control-group:last-of-type {
-  border-bottom: none;
-}
-
 .collapsible {
   cursor: pointer;
   position: relative;
@@ -231,7 +226,6 @@ button {
   transition: all 0.3s ease;
 }
 
-/* Settings impact indicators */
 .value-label.high-impact {
   color: #ff6b6b;
   font-weight: bold;
@@ -575,7 +569,6 @@ body.light-mode .drop-zone.drag-over {
   }
 }
 
-/* Tooltip styling */
 .tooltip-container {
   position: relative;
   display: inline-block;
