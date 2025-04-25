@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ASCIIfy</title>
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/video-controls.css">
 </head>
 <body>
   <div class="layout">
@@ -27,12 +27,24 @@
             <p>Drop image or video file here or click to browse</p>
             <input type="file" id="unifiedInput" accept="image/*,video/*" style="position: absolute; opacity: 0; width: 100%; height: 100%; top: 0; left: 0; cursor: pointer;">
           </div>
-        </div>
-        <div id="videoControls" style="display: none;">
+        </div>        <div id="videoControls" style="display: none;">
           <div class="video-controls">
-            <button id="playPause">Play</button>
-            <button id="restart">Restart</button>
-            <button id="toggleLoop" class="loop-button inactive">Loop: OFF</button>
+            <button id="captureAnimation" class="primary-button">Capture Animation</button>
+            <button id="stopCapture" style="display: none;">Stop Capture</button>
+            <div id="captureProgress" class="progress-container" style="display: none;">
+              <div class="progress-bar">
+                <div id="captureProgressFill" class="progress-fill"></div>
+              </div>
+              <span id="captureProgressText">0%</span>
+            </div>
+            <div class="capture-info">
+              <span id="frameCounter">0 frames</span>
+              <span id="durationCounter">0.0s</span>
+            </div>
+            <div class="control loop-control">
+              <input type="checkbox" id="loopCapture" checked>
+              <label for="loopCapture">Loop Animation</label>
+            </div>
           </div>
         </div>
       </section>
@@ -79,60 +91,67 @@
           <div class="control">
             <label for="invert">Invert Colors:</label>
             <input type="checkbox" id="invert">
-          </div>
-          <div class="control">
+          </div>          <div class="control">
             <label for="ignoreWhite">Ignore Pure White:</label>
             <input type="checkbox" id="ignoreWhite" checked>
           </div>
-        </div>
-      </section>
-
-      <section class="control-group export-settings">
-        <h3 class="collapsible">3. Export Animation</h3>
-        <div class="collapsible-content">
           <div class="control">
             <label for="exportFPS">Frame Rate (FPS):</label>
             <input type="number" id="exportFPS" min="1" max="60" value="30">
           </div>
-          <div class="control">
-            <label for="exportFormat">Format:</label>
-            <select id="exportFormat">
-              <option value="json" selected>JSON</option>
-              <option value="js">JavaScript Module</option>
-            </select>
-          </div>
-          <div class="control">
-            <label for="exportMode">Export Mode:</label>
-            <select id="exportMode">
-              <option value="single" selected>Single File</option>
-              <option value="separate">Separate Files (ZIP)</option>
-            </select>
-          </div>
-          <div class="control">
-            <p class="export-note">Note: Each export captures the frames from exactly one full video playthrough. Looping is OFF by default to ensure consistent exports.</p>
-            <button id="startExport">Export Animation</button>
-            <div id="exportProgress" style="display: none;">
-              <div id="progressBar">
-                <div id="progressFill"></div>
-              </div>
-              <span id="progressText">0%</span>
-            </div>
-          </div>
         </div>
-      </section>
-      
-      <section class="control-group import-preview">
-        <h3 class="collapsible">4. Preview Animation</h3>
+      </section>      <section class="control-group export-settings">
+        <h3 class="collapsible">3. Export Animation</h3>
         <div class="collapsible-content">
-          <div class="control">
-            <div class="drop-zone mini-drop-zone">
-              <p>Drop JSON/JS file or click to browse</p>
-              <input type="file" id="importFile" accept=".json,.js" style="position: absolute; opacity: 0; width: 100%; height: 100%; top: 0; left: 0; cursor: pointer;">
+          <div class="export-controls-container">
+            <!-- Export Settings Section -->
+            <div class="export-config">
+              <h4>Export Settings</h4>
+              <div class="control">
+                <label for="exportFormat">Format:</label>
+                <select id="exportFormat">
+                  <option value="json" selected>JSON</option>
+                  <option value="js">JavaScript Module</option>
+                </select>
+              </div>
+              <div class="control">
+                <label for="exportMode">Export Mode:</label>
+                <select id="exportMode">
+                  <option value="single" selected>Single File</option>
+                  <option value="separate">Separate Files (ZIP)</option>
+                  <option value="preview">Preview Only</option>
+                </select>
+              </div>
+              <div class="control">
+                <p class="export-note">Note: Each export captures the frames from exactly one full video playthrough.</p>
+                <button id="startExport">Export Animation</button>
+                <div id="exportProgress" style="display: none;">
+                  <div id="progressBar">
+                    <div id="progressFill"></div>
+                  </div>
+                  <span id="progressText">0%</span>
+                </div>
+              </div>
             </div>
-          </div>
-          <div class="control preview-controls">
-            <button id="previewAnimation" disabled>Preview</button>
-            <button id="stopPreview" disabled style="display: none;">Stop</button>
+
+            <!-- Preview Section -->
+            <div class="preview-section">
+              <h4>Preview Animation</h4>
+              <div class="control">
+                <div class="drop-zone mini-drop-zone">
+                  <p>Drop JSON/JS file or click to browse</p>
+                  <input type="file" id="importFile" accept=".json,.js" style="position: absolute; opacity: 0; width: 100%; height: 100%; top: 0; left: 0; cursor: pointer;">
+                </div>
+              </div>
+              <div class="control preview-controls">
+                <button id="previewAnimation" disabled>Preview</button>
+                <button id="stopPreview" disabled style="display: none;">Stop</button>
+                <div class="control loop-control">
+                  <input type="checkbox" id="loopPreview" checked>
+                  <label for="loopPreview">Loop Animation</label>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -153,9 +172,11 @@
   
   <canvas id="canvas" style="display: none;"></canvas>
   <canvas id="videoCanvas" style="display: none;"></canvas>
-  
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="js/ascii-generator.js"></script>
-  <script src="js/ascii-exporter.js"></script>
+  <!-- Modular code organization -->  <script src="js/core.js"></script>
+  <script src="js/media-processor.js"></script>
+  <script src="js/ui-manager.js"></script>
+  <script src="js/capture-engine.js"></script>
+  <script src="js/export-manager.js"></script>
 </body>
 </html>
