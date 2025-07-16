@@ -20,159 +20,177 @@
         </div>
       </section>
       
+      <!-- 1. UPLOAD SECTION -->
       <section class="control-group upload-group">
-        <h3>1. Upload Your File</h3>
-        <div id="fileUpload">
-          <div class="drop-zone unified-drop-zone">
-            <p>Drop image or video file here or click to browse</p>
-            <input type="file" id="unifiedInput" accept="image/*,video/*" style="position: absolute; opacity: 0; width: 100%; height: 100%; top: 0; left: 0; cursor: pointer;">
-          </div>
-        </div>        <div id="videoControls" style="display: none;">
-          <div class="video-controls">
-            <div class="preview-controls">
-              <button id="playPreview" class="primary-button">Play Preview</button>
-              <button id="stopPreview" style="display: none;">Stop Preview</button>
-              <div class="control loop-control">
-                <input type="checkbox" id="previewLoop" checked>
-                <label for="previewLoop">Loop Preview</label>
-              </div>
+        <h3>1. Upload File</h3>
+        <div class="drop-zone unified-drop-zone">
+          <p>Drop image, video, or GIF here or click to browse</p>
+          <input type="file" id="unifiedInput" accept="image/*,video/*" style="position: absolute; opacity: 0; width: 100%; height: 100%; top: 0; left: 0; cursor: pointer;">
+        </div>
+      </section>
+      
+      <!-- 2. PLAYBACK CONTROLS (for videos/gifs) -->
+      <section class="control-group playback-controls" id="playbackControls" style="display: none;">
+        <h3>2. Playback</h3>
+        <div class="playback-section">
+          <div class="playback-buttons">
+            <button id="playPauseButton" class="primary-button">Play</button>
+            <div class="control loop-control">
+              <input type="checkbox" id="loopPlayback" checked>
+              <label for="loopPlayback">Loop</label>
             </div>
-            
-            <div class="capture-controls">
-              <button id="captureAnimation" class="action-button">Capture For Export</button>
-              <button id="stopCapture" style="display: none;">Stop Capture</button>
-              <div id="captureProgress" class="progress-container" style="display: none;">
-                <div class="progress-bar">
-                  <div id="captureProgressFill" class="progress-fill"></div>
-                </div>
-                <span id="captureProgressText">0%</span>
+          </div>
+          <div class="capture-section">
+            <button id="captureAnimation" class="action-button">Capture Animation</button>
+            <button id="stopCapture" style="display: none;">Stop Capture</button>
+            <div id="captureProgress" class="progress-container" style="display: none;">
+              <div class="progress-bar">
+                <div id="captureProgressFill" class="progress-fill"></div>
               </div>
-              <div class="capture-info">
-                <span id="frameCounter">0 frames</span>
-                <span id="durationCounter">0.0s</span>
-              </div>
-              <div class="capture-status" id="captureStatus">
-                <div class="status-indicator"></div>
-                <span>Ready to capture</span>
-              </div>
+              <span id="captureProgressText">0%</span>
+            </div>
+            <div class="capture-info">
+              <span id="frameCounter">0 frames</span>
+              <span id="durationCounter">0.0s</span>
+            </div>
+            <div class="capture-status" id="captureStatus">
+              <div class="status-indicator"></div>
+              <span>Ready to capture</span>
             </div>
           </div>
         </div>
       </section>
       
-      <section class="control-group image-processing">
-        <h3 class="collapsible active">2. Adjustments</h3>
+      <!-- 3. SETTINGS -->
+      <section class="control-group settings-group">
+        <h3 class="collapsible active">3. Settings</h3>
         <div class="collapsible-content show">
-          <div class="control">
-            <label for="asciiWidth" class="tooltip-container">
-              Output Width (chars):
-              <span class="tooltip">Controls the number of characters per line. Higher values increase detail and file size.</span>
-            </label>
-            <input type="range" id="asciiWidth" min="20" max="500" value="150">
-            <span class="value-label" id="asciiWidthVal">150</span>
+          <!-- Display Settings -->
+          <div class="settings-group">
+            <h4>Display</h4>
+            <div class="control">
+              <label for="asciiWidth">Width (chars):</label>
+              <input type="range" id="asciiWidth" min="20" max="500" value="150">
+              <span class="value-label" id="asciiWidthVal">150</span>
+            </div>
+            <div class="control">
+              <label for="zoom">Zoom (%):</label>
+              <input type="range" id="zoom" min="5" max="200" value="100">
+              <span class="value-label" id="zoomVal">100</span>
+            </div>
+            <div class="control">
+              <label for="charset">Character Set:</label>
+              <select id="charset">
+                <option value="binary" selected>Binary (0, 1)</option>
+                <option value="blocks">Blocks (█▓▒░ )</option>
+              </select>
+            </div>
           </div>
-          <div class="control">
-            <label for="brightness">Brightness:</label>
-            <input type="range" id="brightness" min="-100" max="100" value="0">
-            <span class="value-label" id="brightnessVal">0</span>
+          
+          <!-- Image Processing -->
+          <div class="settings-group">
+            <h4>Image Processing</h4>
+            <div class="control">
+              <label for="brightness">Brightness:</label>
+              <input type="range" id="brightness" min="-100" max="100" value="0">
+              <span class="value-label" id="brightnessVal">0</span>
+            </div>
+            <div class="control">
+              <label for="contrast">Contrast:</label>
+              <input type="range" id="contrast" min="-100" max="100" value="0">
+              <span class="value-label" id="contrastVal">0</span>
+            </div>
+            <div class="control">
+              <label for="blur">Blur (px):</label>
+              <input type="range" id="blur" min="0" max="10" step="0.01" value="0">
+              <span class="value-label" id="blurVal">0</span>
+            </div>
+            <div class="control checkbox-control">
+              <input type="checkbox" id="enableEdgeDetection">
+              <label for="enableEdgeDetection">Edge Detection</label>
+            </div>
+            <div class="control checkbox-control">
+              <input type="checkbox" id="invert">
+              <label for="invert">Invert Colors</label>
+            </div>
+            <div class="control checkbox-control">
+              <input type="checkbox" id="ignoreWhite" checked>
+              <label for="ignoreWhite">Ignore Pure White</label>
+            </div>
           </div>
-          <div class="control">
-            <label for="contrast">Contrast:</label>
-            <input type="range" id="contrast" min="-100" max="100" value="0">
-            <span class="value-label" id="contrastVal">0</span>
-          </div>
-          <div class="control">
-            <label for="blur">Blur (px):</label>
-            <input type="range" id="blur" min="0" max="10" step="0.01" value="0">
-            <span class="value-label" id="blurVal">0</span>
-          </div>
-          <div class="control">
-            <label for="zoom" class="tooltip-container">
-              Zoom (%):
-              <span class="tooltip">Changes the display size on screen only. Does not affect export file.</span>
-            </label>
-            <input type="range" id="zoom" min="5" max="200" value="100">
-            <span class="value-label" id="zoomVal">100</span>
-          </div>
-          <div class="control">
-            <label for="charset">Character Set:</label>
-            <select id="charset">
-              <option value="binary" selected>Binary</option>
-              <option value="blocks">Blocks</option>
-            </select>
-          </div>
-          <div class="control">
-            <label for="enableEdgeDetection">Edge Detection:</label>
-            <input type="checkbox" id="enableEdgeDetection">
-          </div>
-          <div class="control">
-            <label for="invert">Invert Colors:</label>
-            <input type="checkbox" id="invert">
-          </div>          <div class="control">
-            <label for="ignoreWhite">Ignore Pure White:</label>
-            <input type="checkbox" id="ignoreWhite" checked>
-          </div>
-          <div class="control">
-            <label for="exportFPS" class="tooltip-container">
-              Frame Rate (FPS):
-              <span class="tooltip">Controls animation speed in exported file. Higher values create smoother animations but larger files.</span>
-            </label>
-            <input type="number" id="exportFPS" min="1" max="60" value="30">
+          
+          <!-- Animation Settings -->
+          <div class="settings-group">
+            <h4>Animation</h4>
+            <div class="control">
+              <label for="exportFPS">Frame Rate (FPS):</label>
+              <input type="number" id="exportFPS" min="1" max="60" value="30">
+            </div>
           </div>
         </div>
-      </section>      <section class="control-group export-settings">
-        <h3 class="collapsible">3. Export Animation</h3>
+      </section>
+
+      <!-- 4. PREVIEW -->
+      <section class="control-group preview-group">
+        <h3 class="collapsible active">4. Preview</h3>
+        <div class="collapsible-content show">
+          <div class="preview-controls">
+            <button id="previewAnimation" disabled>Preview Captured Animation</button>
+            <button id="stopAnimationPreview" disabled style="display: none;">Stop Preview</button>
+            <div class="control checkbox-control">
+              <input type="checkbox" id="loopPreview" checked>
+              <label for="loopPreview">Loop Preview</label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. EXPORT & IMPORT -->
+      <section class="control-group export-import-group">
+        <h3 class="collapsible">5. Export & Import</h3>
         <div class="collapsible-content">
-          <div class="export-controls-container">
-            <!-- Export Status Section -->
+          <!-- Export Section -->
+          <div class="export-section">
+            <h4>Export Animation</h4>
             <div class="export-status" id="exportStatus">
               <div class="status-indicator empty"></div>
-              <span>No animation captured for export yet</span>
+              <span>No animation captured yet</span>
             </div>
-            
-            <!-- Export Settings Section -->
-            <div class="export-config">
-              <h4>Export Settings</h4>
-              <div class="control">
-                <label for="exportFormat">Format:</label>
-                <select id="exportFormat">
-                  <option value="json" selected>JSON</option>
-                  <option value="js">JavaScript Module</option>
-                </select>
-              </div>
-              <div class="control">
-                <label for="exportMode">Export Mode:</label>
-                <select id="exportMode">
-                  <option value="single" selected>Single File</option>
-                  <option value="separate">Separate Files (ZIP)</option>
-                  <option value="preview">Preview Only</option>
-                </select>
-              </div>
-              <div class="control">
-                <p class="export-note">Note: Only the frames captured for export will be included in the final file.</p>
-                <button id="startExport" disabled>Export Animation</button>
-                <div id="exportProgress" style="display: none;">
-                  <div id="progressBar">
-                    <div id="progressFill"></div>
-                  </div>
-                  <span id="progressText">0%</span>
-                </div>
-              </div>
+            <div class="control">
+              <label for="exportFormat">Format:</label>
+              <select id="exportFormat">
+                <option value="json" selected>JSON</option>
+                <option value="js">JavaScript Module</option>
+                <option value="jpg">JPEG Image</option>
+              </select>
             </div>
-
-            <!-- Import Section -->
-            <div class="import-section">
-              <h4>Import Animation</h4>
-              <div class="control">
-                <div class="drop-zone mini-drop-zone">
-                  <p>Drop JSON/JS file or click to browse</p>
-                  <input type="file" id="importFile" accept=".json,.js" style="position: absolute; opacity: 0; width: 100%; height: 100%; top: 0; left: 0; cursor: pointer;">
-                </div>
+            <div class="control">
+              <label for="exportMode">Mode:</label>
+              <select id="exportMode">
+                <option value="single" selected>Single File</option>
+                <option value="separate">ZIP Archive</option>
+                <option value="preview">Preview Only</option>
+              </select>
+            </div>
+            <button id="startExport" disabled>Export</button>
+            <div id="exportProgress" style="display: none;">
+              <div id="progressBar">
+                <div id="progressFill"></div>
               </div>
-              <div class="control preview-controls">
-                <button id="previewImportedAnimation" disabled>Preview Imported</button>
-                <button id="stopImportedPreview" disabled style="display: none;">Stop</button>
-              </div>
+              <span id="progressText">0%</span>
+            </div>
+          </div>
+          
+          <!-- Import Section -->
+          <div class="import-section">
+            <h4>Import Animation</h4>
+            <div class="drop-zone mini-drop-zone">
+              <p>Drop exported JSON/JS file here</p>
+              <input type="file" id="importFile" accept=".json,.js" style="position: absolute; opacity: 0; width: 100%; height: 100%; top: 0; left: 0; cursor: pointer;">
+            </div>
+            <div class="import-controls">
+              <button id="previewImportedAnimation" disabled>Preview Imported</button>
+              <button id="stopImportedPreview" disabled style="display: none;">Stop</button>
             </div>
           </div>
         </div>

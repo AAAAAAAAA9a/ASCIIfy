@@ -42,15 +42,19 @@ const CaptureEngine = {
       stopCaptureBtn.addEventListener('click', () => this.stopCapture());
     }
     
-    const playPreviewBtn = document.getElementById('playPreview');
-    const stopPreviewBtn = document.getElementById('stopPreview');
+    const playPauseBtn = document.getElementById('playPauseButton');
+    const loopCheckbox = document.getElementById('loopPlayback');
     
-    if (playPreviewBtn) {
-      playPreviewBtn.addEventListener('click', () => this.startPreview());
+    if (playPauseBtn) {
+      playPauseBtn.addEventListener('click', () => this.togglePlayPause());
     }
     
-    if (stopPreviewBtn) {
-      stopPreviewBtn.addEventListener('click', () => this.stopPreview());
+    if (loopCheckbox) {
+      loopCheckbox.addEventListener('change', () => {
+        if (this.core.state.video) {
+          this.core.state.video.loop = loopCheckbox.checked;
+        }
+      });
     }
     
     const fpsInput = document.getElementById('exportFPS');
@@ -67,6 +71,25 @@ const CaptureEngine = {
     const clearExportFramesBtn = document.getElementById('clearExportFrames');
     if (clearExportFramesBtn) {
       clearExportFramesBtn.addEventListener('click', () => this.clearExportFrames());
+    }
+  },
+
+  togglePlayPause() {
+    if (!this.core.state.video || this.core.state.currentFileType !== 'video') {
+      this.core.showMessage('No video loaded.', 'error');
+      return;
+    }
+    
+    const playPauseBtn = document.getElementById('playPauseButton');
+    
+    if (this.core.state.isPreviewPlaying) {
+      // Currently playing, so pause
+      this.stopPreview();
+      playPauseBtn.textContent = 'Play';
+    } else {
+      // Currently paused, so play
+      this.startPreview();
+      playPauseBtn.textContent = 'Pause';
     }
   },
 
@@ -102,13 +125,12 @@ const CaptureEngine = {
       this.stopCapture();
     }
     
-    const playBtn = document.getElementById('playPreview');
-    const stopBtn = document.getElementById('stopPreview');
+    const playPauseBtn = document.getElementById('playPauseButton');
+    if (playPauseBtn) {
+      playPauseBtn.textContent = 'Pause';
+    }
     
-    playBtn.style.display = 'none';
-    stopBtn.style.display = 'block';
-    
-    const loopElement = document.getElementById('previewLoop');
+    const loopElement = document.getElementById('loopPlayback');
     const shouldLoop = loopElement ? loopElement.checked : true;
     
     this.core.state.video.currentTime = 0;
@@ -127,8 +149,9 @@ const CaptureEngine = {
         console.error('Failed to play video for preview:', err);
         this.core.state.isPreviewPlaying = false;
         this.core.showMessage('Failed to start video playback. Please try again.', 'error');
-        playBtn.style.display = 'block';
-        stopBtn.style.display = 'none';
+        if (playPauseBtn) {
+          playPauseBtn.textContent = 'Play';
+        }
       });
   },
   
@@ -151,6 +174,8 @@ const CaptureEngine = {
     }
     
     const now = timestamp || performance.now(); 
+    
+    
     if (this._lastPreviewRender && now - this._lastPreviewRender < 16) {
       this.state.previewAnimationFrame = requestAnimationFrame((ts) => this.previewVideoFrames(ts));
       return;
@@ -166,6 +191,8 @@ const CaptureEngine = {
     }
     
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw video frame
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -193,11 +220,10 @@ const CaptureEngine = {
       this.core.state.video.pause();
     }
     
-    const playBtn = document.getElementById('playPreview');
-    const stopBtn = document.getElementById('stopPreview');
-    
-    playBtn.style.display = 'block';
-    stopBtn.style.display = 'none';
+    const playPauseBtn = document.getElementById('playPauseButton');
+    if (playPauseBtn) {
+      playPauseBtn.textContent = 'Play';
+    }
     
     this.core.showMessage('Preview stopped.', 'info', 2000);
   },
@@ -215,6 +241,13 @@ const CaptureEngine = {
     
     if (this.core.state.isPreviewPlaying) {
       this.stopPreview();
+    }
+    
+    // Update play/pause button during capture
+    const playPauseBtn = document.getElementById('playPauseButton');
+    if (playPauseBtn) {
+      playPauseBtn.textContent = 'Capturing...';
+      playPauseBtn.disabled = true;
     }
     
     this.core.state.exportFrames = [];
@@ -268,7 +301,7 @@ const CaptureEngine = {
       this.state.animationFrame = requestAnimationFrame((ts) => this.captureVideoFrames(ts));
       return;
     }
-
+    
     const MAX_FRAMES = 3000;
     if (this.core.state.exportFrames.length >= MAX_FRAMES) {
       this.core.state.isPlaying = false;
@@ -386,6 +419,8 @@ const CaptureEngine = {
     if (!ctx || !canvas || !this.core.state.video) return null;
     
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw video frame for capture
     ctx.drawImage(this.core.state.video, 0, 0, canvas.width, canvas.height);
     
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -520,9 +555,16 @@ const CaptureEngine = {
     const captureBtn = document.getElementById('captureAnimation');
     const stopCaptureBtn = document.getElementById('stopCapture');
     const progressContainer = document.getElementById('captureProgress');
+    const playPauseBtn = document.getElementById('playPauseButton');
     
     captureBtn.style.display = 'block';
     stopCaptureBtn.style.display = 'none';
     progressContainer.style.display = 'none';
+    
+    // Reset play/pause button
+    if (playPauseBtn) {
+      playPauseBtn.textContent = 'Play';
+      playPauseBtn.disabled = false;
+    }
   }
 };

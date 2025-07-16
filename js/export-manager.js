@@ -18,7 +18,7 @@ const ExportManager = {
     this.core = coreModule;
     
     this.state.previewButtonEl = document.getElementById('previewAnimation');
-    this.state.stopPreviewButtonEl = document.getElementById('stopPreview');
+    this.state.stopPreviewButtonEl = document.getElementById('stopAnimationPreview');
     this.state.loopPreviewEl = document.getElementById('loopPreview');
     this.state.asciiArtEl = document.getElementById('ascii-art');
     this.state.exportButtonEl = document.getElementById('startExport');
@@ -236,6 +236,19 @@ const ExportManager = {
     const fps = parseInt(document.getElementById('exportFPS').value, 10) || 30;
     const format = document.getElementById('exportFormat').value;
     const frames = [...this.core.state.exportFrames];
+    
+    // For JPEG export, allow exporting current ASCII art even without captured frames
+    if ((!frames || frames.length === 0) && format === 'jpg') {
+      const currentAscii = document.getElementById('ascii-art').textContent;
+      if (!currentAscii || currentAscii.trim() === '') {
+        this.core.showMessage('No ASCII art to export. Please upload and process an image first.', 'error');
+        return;
+      }
+      // Export current ASCII art as JPEG
+      this.exportCurrentAsciiArt(format);
+      return;
+    }
+    
     if (!frames || frames.length === 0) {
       this.core.showMessage('No frames available to export. Please capture an animation first.', 'error');
       return;
@@ -335,7 +348,18 @@ const ExportManager = {
       this.state.progressFillEl.style.width = '90%';
       this.state.progressTextEl.textContent = `Step 4/4: Creating output file...`;
       const exportMode = document.getElementById('exportMode').value;
-      if (exportMode === 'separate') {
+      if (exportMode === 'preview') {
+        // Preview only mode - just start preview without creating files
+        this.state.progressFillEl.style.width = '100%';
+        this.state.progressTextEl.textContent = `Preview mode - starting animation preview...`;
+        this.startPreview();
+        setTimeout(() => {
+          this.state.exportProgressEl.style.display = 'none';
+          this.state.exportButtonEl.disabled = false;
+          this.state.exportInProgress = false;
+        }, 1000);
+        return;
+      } else if (exportMode === 'separate') {
         this.exportFramesAsZip(validFrames, fps, format, timestamp, fileType);
       } else {
         let exportContent, mimeType, extension;
@@ -343,6 +367,13 @@ const ExportManager = {
           exportContent = JSON.stringify(exportData);
           mimeType = 'application/json';
           extension = 'json';
+        } else if (format === 'js') {
+          exportContent = `export default ${JSON.stringify(exportData)};`;
+          mimeType = 'text/javascript';
+          extension = 'js';
+        } else if (format === 'jpg') {
+          this.createImageExport(validFrames, exportData, format, timestamp, fileType);
+          return; // Image export handles its own completion
         } else {
           exportContent = `export default ${JSON.stringify(exportData)};`;
           mimeType = 'text/javascript';
@@ -582,5 +613,96 @@ const ExportManager = {
     if (this.core.state.currentMedia) {
       MediaProcessor.processMedia(this.core.state.currentMedia);
     }
+  },
+
+  // =============================================================================
+  // JPEG EXPORT
+  // =============================================================================
+
+  createImageExport(frames, exportData, format, timestamp, fileType) {
+    // Create a canvas to render the ASCII art as an image
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    // Set up canvas styling
+    const fontSize = 12;
+    const lineHeight = fontSize * 1.2;
+    const fontFamily = 'SF Mono, Monaco, Cascadia Code, Roboto Mono, Consolas, Courier New, monospace';
+    
+    // Calculate canvas dimensions
+    const asciiText = frames[0]; // Use first frame for images
+    const lines = asciiText.split('\n');
+    const maxLineLength = Math.max(...lines.map(line => line.length));
+    
+    canvas.width = maxLineLength * (fontSize * 0.6) + 40; // Character width approximation + padding
+    canvas.height = lines.length * lineHeight + 40; // Line height + padding
+
+    // Set canvas background
+    ctx.fillStyle = '#0f0f0f'; // Dark background to match UI
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Set text styling
+    ctx.fillStyle = '#e8e8e8'; // Light text color
+    ctx.font = `${fontSize}px ${fontFamily}`;
+    ctx.textBaseline = 'top';
+
+    // Draw ASCII art
+    lines.forEach((line, index) => {
+      ctx.fillText(line, 20, 20 + (index * lineHeight));
+    });
+
+    // Add metadata text at bottom
+    ctx.fillStyle = '#888'; // Dimmer color for metadata
+    ctx.font = `${fontSize * 0.8}px ${fontFamily}`;
+    const metadataY = canvas.height - 20;
+    const metadataText = `Generated by ASCIIfy - ${exportData.width}x${exportData.height}`;
+    ctx.fillText(metadataText, 20, metadataY);
+
+    // Convert to JPEG and download
+    const mimeType = 'image/jpeg';
+    const quality = 0.9;
+    
+    canvas.toBlob((blob) => {
+      const url = URL.createObjectURL(blob);
+      const filename = `ascii-art-${fileType}-${timestamp}.${format}`;
+      this.downloadFile(url, filename);
+      
+      // Show completion message
+      this.core.showMessage('Successfully exported ASCII art as JPEG image', 'success');
+      this.state.progressFillEl.style.width = '100%';
+      this.state.progressTextEl.textContent = `Export complete!`;
+      
+      // Cleanup
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+        setTimeout(() => {
+          this.state.exportProgressEl.style.display = 'none';
+          this.state.exportButtonEl.disabled = false;
+          this.state.exportInProgress = false;
+        }, 500);
+      }, 300);
+    }, mimeType, quality);
+  },
+
+  exportCurrentAsciiArt(format) {
+    // Export the currently displayed ASCII art as JPEG
+    const currentAscii = document.getElementById('ascii-art').textContent;
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const fileType = this.core.state.currentFileType || 'image';
+    
+    // Create basic export data for current ASCII
+    const exportData = {
+      width: this.core.state.frameWidth || 150,
+      height: this.core.state.frameHeight || 50,
+      fps: 1,
+      loop: false,
+      frames: [currentAscii],
+      created: new Date().toISOString(),
+      generatorVersion: '1.2',
+      frameCount: 1,
+      duration: 1
+    };
+    
+    this.createImageExport([currentAscii], exportData, format, timestamp, fileType);
   }
 };

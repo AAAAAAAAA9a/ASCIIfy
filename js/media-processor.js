@@ -1,26 +1,42 @@
 const MediaProcessor = {
   core: null,
   
+  // =============================================================================
+  // INITIALIZATION
+  // =============================================================================
+  
   init(coreModule) {
     this.core = coreModule;
     this.loadDefaultImage();
   },
   
+  // =============================================================================
+  // FILE PROCESSING ENTRY POINT
+  // =============================================================================
+  
   processFile(file) {
+    console.log('Processing file:', file.name, 'Type:', file.type);
     this.core.cleanupMedia();
     this.core.state.frames = [];
     
-    if (file.type.startsWith('image/')) {
+    if (file.type === 'image/gif') {
+      // Process GIFs as static images
+      console.log('Processing GIF as static image');
+      this.processGifFile(file);
+    } else if (file.type.startsWith('image/')) {
+      console.log('Processing as image');
       this.core.state.currentFileType = 'image';
-      document.getElementById('videoControls').style.display = 'none';
+      document.getElementById('playbackControls').style.display = 'none';
       this.processImageFile(file);
       UIManager.updateFileTypeIndicator('image');
     } else if (file.type.startsWith('video/')) {
+      console.log('Processing as video');
       this.core.state.currentFileType = 'video';
-      document.getElementById('videoControls').style.display = 'block';
+      document.getElementById('playbackControls').style.display = 'block';
       this.processVideoFile(file);
       UIManager.updateFileTypeIndicator('video');
     } else {
+      console.log('Unsupported file type:', file.type);
       this.core.showMessage('Unsupported file type. Please upload an image or video.', 'error');
       return;
     }
@@ -29,8 +45,12 @@ const MediaProcessor = {
     document.getElementById('previewAnimation').disabled = false;
   },
   
+  // =============================================================================
+  // IMAGE PROCESSING
+  // =============================================================================
+  
   processImageFile(file) {
-    this.core.showMessage('Processing image...', 'info', 0);
+    this.core.showMessage('Processing image...', 'info', 0, true);
     
     const objectURL = URL.createObjectURL(file);
     
@@ -61,9 +81,50 @@ const MediaProcessor = {
     img.src = objectURL;
   },
   
+  processGifFile(file) {
+    this.core.showMessage('Processing GIF as static image...', 'info', 0, true);
+    
+    const objectURL = URL.createObjectURL(file);
+    
+    const img = new Image();
+    let revoked = false;
+    
+    const revokeURL = () => {
+      if (!revoked) {
+        URL.revokeObjectURL(objectURL);
+        revoked = true;
+      }
+    };
+    
+    img.onload = () => {
+      this.core.state.currentMedia = img;
+      this.core.state.currentFileType = 'image';
+      this.processMedia(img);
+      UIManager.updateFileTypeIndicator('gif', `${img.width}x${img.height} (static)`);
+      
+      // Hide playback controls since GIFs are treated as static images
+      document.getElementById('playbackControls').style.display = 'none';
+      
+      revokeURL();
+    };
+    
+    img.onerror = () => {
+      this.core.showMessage('Error loading GIF. Please try another file.', 'error');
+      revokeURL();
+    };
+    
+    setTimeout(revokeURL, 30000);
+    
+    img.src = objectURL;
+  },
+  
+  // =============================================================================
+  // VIDEO PROCESSING
+  // =============================================================================
+  
   processVideoFile(file) {
     this.core.state.currentMedia = null;
-    this.core.showMessage('Processing video...', 'info', 0);
+    this.core.showMessage('Processing video...', 'info', 0, true);
     
     if (!file.type.match(/^video\/(mp4|webm|ogg|mov|avi)$/) && 
         !file.name.match(/\.(mp4|webm|ogg|mov|avi)$/i)) {
@@ -120,7 +181,14 @@ const MediaProcessor = {
       }
       
       if (CaptureEngine && CaptureEngine.startPreview) {
-        setTimeout(() => CaptureEngine.startPreview(), 300);
+        setTimeout(() => {
+          CaptureEngine.startPreview();
+          // Update the play/pause button text
+          const playPauseBtn = document.getElementById('playPauseButton');
+          if (playPauseBtn) {
+            playPauseBtn.textContent = 'Pause';
+          }
+        }, 300);
       }
     });
     
@@ -149,19 +217,35 @@ const MediaProcessor = {
     }
   },
   
+  // =============================================================================
+  // MEDIA PROCESSING CORE
+  // =============================================================================
+  
   processMedia(media) {
-    const settings = UIManager.getSettings();
-    
-    const asciiWidth = Math.min(settings.width, this.core.state.maxProcessingWidth);
-    
-    const fontAspectRatio = 0.55;
-    const asciiHeight = Math.round((media.height / media.width) * asciiWidth * fontAspectRatio);
-    
-    this.core.state.frameWidth = asciiWidth;
-    this.core.state.frameHeight = asciiHeight;
-    
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    try {
+      const settings = UIManager.getSettings();
+      
+      if (!media || !media.width || !media.height) {
+        throw new Error('Invalid media dimensions');
+      }
+      
+      const asciiWidth = Math.min(settings.width, this.core.state.maxProcessingWidth);
+      
+      const fontAspectRatio = 0.55;
+      const asciiHeight = Math.round((media.height / media.width) * asciiWidth * fontAspectRatio);
+      
+      this.core.state.frameWidth = asciiWidth;
+      this.core.state.frameHeight = asciiHeight;
+      
+      const canvas = document.getElementById('canvas');
+      if (!canvas) {
+        throw new Error('Canvas element not found');
+      }
+      
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) {
+        throw new Error('Could not get canvas context');
+      }
     
     canvas.width = asciiWidth;
     canvas.height = asciiHeight;
@@ -205,9 +289,14 @@ const MediaProcessor = {
       this.core.state.frames = [ascii];
     }
     
-    document.getElementById('ascii-art').textContent = ascii;
-    
-    return ascii;
+      document.getElementById('ascii-art').textContent = ascii;
+      
+      return ascii;
+    } catch (error) {
+      console.error('Error processing media:', error);
+      this.core.showMessage(`Error processing media: ${error.message}`, 'error');
+      return '';
+    }
   },
   
   processFrame(imageData) {
@@ -273,6 +362,10 @@ const MediaProcessor = {
     
     return asciiFrame;
   },
+  
+  // =============================================================================
+  // ASCII CONVERSION UTILITIES
+  // =============================================================================
   
   charCache: new Map(),
   
@@ -449,35 +542,13 @@ const MediaProcessor = {
     return hash;
   },
   
+  // =============================================================================
+  // INITIALIZATION HELPERS
+  // =============================================================================
+  
   loadDefaultImage() {
-    this.core.updateStatusMessage("Loading default image...");
-    
-    const defaultImg = new Image();
-    defaultImg.crossOrigin = "Anonymous"; 
-    
-    const loadingTimeout = setTimeout(() => {
-      if (!defaultImg.complete) {
-        this.core.updateStatusMessage("Please upload an image to begin.");
-      }
-    }, 3000);
-    
-    defaultImg.onload = () => {
-      clearTimeout(loadingTimeout);
-      
-      this.core.state.currentMedia = defaultImg;
-      this.core.state.currentFileType = 'image';
-      this.processMedia(defaultImg);
-      this.core.updateStatusMessage("Default image loaded successfully.");
-      
-      document.getElementById('startExport').disabled = false;
-      document.getElementById('previewAnimation').disabled = false;
-    };
-    
-    defaultImg.onerror = () => {
-      clearTimeout(loadingTimeout);
-      this.core.updateStatusMessage("Please upload an image to begin.");
-    };
-    
-    defaultImg.src = "https://i.ibb.co/chHSSFQ/horse.png";
+    this.core.updateStatusMessage("Ready to process images and videos. Upload a file to begin.");
+    document.getElementById('startExport').disabled = true;
+    document.getElementById('previewAnimation').disabled = true;
   }
 };

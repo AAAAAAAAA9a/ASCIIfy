@@ -50,11 +50,25 @@ const ASCIIfy = {
   },
   
   setupNotifications() {
-    this.showMessage = (message, type = 'info', duration = 4000) => {
+    this.showMessage = (message, type = 'info', duration = 4000, showSpinner = false) => {
       const notificationArea = document.getElementById('notificationArea');
       if (!notificationArea) return;
       
-      notificationArea.textContent = message;
+      // Clear existing content
+      notificationArea.innerHTML = '';
+      
+      // Add spinner if requested
+      if (showSpinner) {
+        const spinner = document.createElement('div');
+        spinner.className = 'loading-spinner';
+        notificationArea.appendChild(spinner);
+      }
+      
+      // Add message text
+      const messageText = document.createElement('span');
+      messageText.textContent = message;
+      notificationArea.appendChild(messageText);
+      
       notificationArea.className = `notification-area ${type}`;
       notificationArea.classList.add('visible');
       
@@ -123,7 +137,7 @@ const ASCIIfy = {
         existingIndicator.remove();
       }
       
-      document.getElementById('videoControls').style.display = 'none';
+      document.getElementById('playbackControls').style.display = 'none';
       document.getElementById('startExport').disabled = true;
       
       if (CaptureEngine) {
@@ -235,7 +249,7 @@ const ASCIIfy = {
       }
     });
     
-    const videoControls = document.getElementById('videoControls');
+    const videoControls = document.getElementById('playbackControls');
     if (videoControls) {
       videoControls.style.display = 'none';
     }
