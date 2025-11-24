@@ -1,9 +1,9 @@
 const MediaProcessor = {
   core: null,
   
-  // =============================================================================
-  // INITIALIZATION
-  // =============================================================================
+  // Cache for ASCII character mappings to improve performance
+  charCache: new Map(),
+  edgeCache: new Map(),
   
   init(coreModule) {
     this.core = coreModule;
@@ -19,30 +19,172 @@ const MediaProcessor = {
     this.core.cleanupMedia();
     this.core.state.frames = [];
     
+    // Reset export state
+    this.core.state.exportFrames = [];
+    this.core.state.hasExportCapture = false;
+    
+    // Determine file type and process accordingly
     if (file.type === 'image/gif') {
-      // Process GIFs as static images
-      console.log('Processing GIF as static image');
+      console.log('Processing GIF');
       this.processGifFile(file);
     } else if (file.type.startsWith('image/')) {
       console.log('Processing as image');
       this.core.state.currentFileType = 'image';
-      document.getElementById('playbackControls').style.display = 'none';
+      
+      // Update UI for image mode
+      UIManager.toggleContentState(true, false);
       this.processImageFile(file);
-      UIManager.updateFileTypeIndicator('image');
-    } else if (file.type.startsWith('video/')) {
+      
+    } else if (file.type.startsWith('video/') || file.name.match(/\.(mp4|webm|ogg|mov|avi)$/i)) {
       console.log('Processing as video');
       this.core.state.currentFileType = 'video';
-      document.getElementById('playbackControls').style.display = 'block';
+      
+      // Update UI for video mode
+      UIManager.toggleContentState(true, true);
       this.processVideoFile(file);
-      UIManager.updateFileTypeIndicator('video');
+      
     } else {
       console.log('Unsupported file type:', file.type);
       this.core.showMessage('Unsupported file type. Please upload an image or video.', 'error');
       return;
     }
     
-    document.getElementById('startExport').disabled = false;
-    document.getElementById('previewAnimation').disabled = false;
+    // Enable export controls
+    const startExportBtn = document.getElementById('startExport');
+    if (startExportBtn) startExportBtn.disabled = false;
+    
+    const previewAnimBtn = document.getElementById('previewAnimation');
+    if (previewAnimBtn) previewAnimBtn.disabled = false;
+  },
+
+  // =============================================================================
+  // GIF PROCESSING
+  // =============================================================================
+
+  processGifFile(file) {
+    this.core.showMessage('Parsing GIF frames...', 'info', 0, true);
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const buffer = new Uint8Array(e.target.result);
+        
+        // Robust check for GifReader
+        const GifReader = (window.exports && window.exports.GifReader) || window.GifReader || (window.omggif && window.omggif.GifReader);
+        
+        if (!GifReader) {
+            console.error('GIF Library Debug:', { 
+              exports: window.exports, 
+              GifReader: window.GifReader,
+              omggif: window.omggif 
+            });
+            throw new Error('GIF library not loaded correctly. Please refresh the page.');
+        }
+
+        const gifReader = new GifReader(buffer);
+        
+        const width = gifReader.width;
+        const height = gifReader.height;
+        const frames = [];
+        
+        // Extract all frames
+        for (let i = 0; i < gifReader.numFrames(); i++) {
+          const frameInfo = gifReader.frameInfo(i);
+          const pixels = new Uint8ClampedArray(width * height * 4);
+          gifReader.decodeAndBlitFrameRGBA(i, pixels);
+          
+          frames.push({
+            data: new ImageData(pixels, width, height),
+            delay: Math.max(frameInfo.delay * 10, 30) // Convert to ms, min 30ms
+          });
+        }
+        
+        this.core.state.gifFrames = frames;
+        this.core.state.currentGifFrameIndex = 0;
+        this.core.state.currentFileType = 'gif';
+        
+        // Create a buffer canvas for the GIF frames
+        if (!this.core.state.gifCanvas) {
+            this.core.state.gifCanvas = document.createElement('canvas');
+        }
+        this.core.state.gifCanvas.width = width;
+        this.core.state.gifCanvas.height = height;
+        
+        this.core.showMessage(`GIF loaded: ${frames.length} frames`, 'success');
+        
+        // Show controls and start playing
+        UIManager.toggleContentState(true, true); // Show controls (treat as video)
+        this.playGif();
+        
+      } catch (error) {
+        console.error('Error parsing GIF:', error);
+        this.core.showMessage(`Error parsing GIF: ${error.message}`, 'error');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  },
+
+  playGif() {
+    if (this.core.state.gifFrames.length === 0) return;
+    
+    this.core.state.isGifPlaying = true;
+    this.updatePlayPauseIcon(true);
+    this.renderGifLoop();
+  },
+
+  pauseGif() {
+    this.core.state.isGifPlaying = false;
+    this.updatePlayPauseIcon(false);
+    if (this.core.state.gifInterval) {
+      clearTimeout(this.core.state.gifInterval);
+      this.core.state.gifInterval = null;
+    }
+  },
+
+  stopGif() {
+    this.pauseGif();
+    this.core.state.currentGifFrameIndex = 0;
+    if (this.core.state.gifFrames.length > 0) {
+      this.renderGifFrame(0);
+    }
+  },
+
+  renderGifLoop() {
+    if (!this.core.state.isGifPlaying) return;
+
+    const frameIndex = this.core.state.currentGifFrameIndex;
+    const frame = this.core.state.gifFrames[frameIndex];
+    
+    this.renderGifFrame(frameIndex);
+    
+    // Update counters
+    const frameCounter = document.getElementById('frameCounter');
+    if (frameCounter) {
+      frameCounter.textContent = `${frameIndex + 1}/${this.core.state.gifFrames.length}`;
+    }
+
+    // Schedule next frame
+    this.core.state.currentGifFrameIndex = (frameIndex + 1) % this.core.state.gifFrames.length;
+    
+    this.core.state.gifInterval = setTimeout(() => {
+      requestAnimationFrame(() => this.renderGifLoop());
+    }, frame.delay);
+  },
+
+  renderGifFrame(index) {
+      const frame = this.core.state.gifFrames[index];
+      const ctx = this.core.state.gifCanvas.getContext('2d');
+      ctx.putImageData(frame.data, 0, 0);
+      this.processMedia(this.core.state.gifCanvas);
+  },
+
+  updatePlayPauseIcon(isPlaying) {
+    const btn = document.getElementById('playPauseButton');
+    if (!btn) return;
+    
+    btn.innerHTML = isPlaying 
+      ? `<svg class="pause-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`
+      : `<svg class="play-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
   },
   
   // =============================================================================
@@ -53,67 +195,22 @@ const MediaProcessor = {
     this.core.showMessage('Processing image...', 'info', 0, true);
     
     const objectURL = URL.createObjectURL(file);
-    
     const img = new Image();
-    let revoked = false;
-    
-    const revokeURL = () => {
-      if (!revoked) {
-        URL.revokeObjectURL(objectURL);
-        revoked = true;
-      }
-    };
     
     img.onload = () => {
       this.core.state.currentMedia = img;
       this.processMedia(img);
-      UIManager.updateFileTypeIndicator('image', `${img.width}x${img.height}`);
-      revokeURL();
+      
+      this.core.showMessage('Image loaded', 'success');
+      
+      // Clean up memory
+      URL.revokeObjectURL(objectURL);
     };
     
     img.onerror = () => {
       this.core.showMessage('Error loading image. Please try another file.', 'error');
-      revokeURL();
+      URL.revokeObjectURL(objectURL);
     };
-    
-    setTimeout(revokeURL, 30000);
-    
-    img.src = objectURL;
-  },
-  
-  processGifFile(file) {
-    this.core.showMessage('Processing GIF as static image...', 'info', 0, true);
-    
-    const objectURL = URL.createObjectURL(file);
-    
-    const img = new Image();
-    let revoked = false;
-    
-    const revokeURL = () => {
-      if (!revoked) {
-        URL.revokeObjectURL(objectURL);
-        revoked = true;
-      }
-    };
-    
-    img.onload = () => {
-      this.core.state.currentMedia = img;
-      this.core.state.currentFileType = 'image';
-      this.processMedia(img);
-      UIManager.updateFileTypeIndicator('gif', `${img.width}x${img.height} (static)`);
-      
-      // Hide playback controls since GIFs are treated as static images
-      document.getElementById('playbackControls').style.display = 'none';
-      
-      revokeURL();
-    };
-    
-    img.onerror = () => {
-      this.core.showMessage('Error loading GIF. Please try another file.', 'error');
-      revokeURL();
-    };
-    
-    setTimeout(revokeURL, 30000);
     
     img.src = objectURL;
   },
@@ -126,23 +223,19 @@ const MediaProcessor = {
     this.core.state.currentMedia = null;
     this.core.showMessage('Processing video...', 'info', 0, true);
     
-    if (!file.type.match(/^video\/(mp4|webm|ogg|mov|avi)$/) && 
-        !file.name.match(/\.(mp4|webm|ogg|mov|avi)$/i)) {
-      this.core.showMessage('Unsupported video format. Please use MP4, WebM, or OGG formats.', 'error');
-      return;
-    }
-    
     const video = document.createElement('video');
     video.muted = true;
     video.autoplay = false;
-    video.loop = false;
+    video.loop = true; // Default to loop for preview
+    video.playsInline = true;
     
     const videoURL = URL.createObjectURL(file);
     this.core.state.videoObjectURL = videoURL;
     video.src = videoURL;
     
+    // Safety timeout in case video never loads
     const loadingTimeout = setTimeout(() => {
-      if (!video.duration) {
+      if (video.readyState < 2) {
         this.core.showMessage('Video loading timeout. Please try another file.', 'error');
         this.cleanupVideoResources(video, videoURL);
       }
@@ -152,14 +245,14 @@ const MediaProcessor = {
       clearTimeout(loadingTimeout);
       
       if (!video.videoWidth || !video.videoHeight) {
-        this.core.showMessage('Invalid video dimensions. Please try another file.', 'error');
+        this.core.showMessage('Invalid video dimensions.', 'error');
         this.cleanupVideoResources(video, videoURL);
         return;
       }
       
+      // Optimize canvas size for performance
       const maxWidth = this.core.state.maxProcessingWidth;
       const aspectRatio = video.videoHeight / video.videoWidth;
-      
       const optimizedWidth = Math.min(video.videoWidth, maxWidth);
       const optimizedHeight = Math.round(optimizedWidth * aspectRatio);
       
@@ -171,23 +264,17 @@ const MediaProcessor = {
       this.core.state.video = video;
       this.core.state.currentMedia = video;
       
-      this.core.showMessage('Video loaded. Live preview will start automatically.', 'success');
+      this.core.showMessage('Video loaded. Live preview starting...', 'success');
       
-      const duration = video.duration || 0;
-      UIManager.updateFileTypeIndicator('video', `${video.videoWidth}x${video.videoHeight}, ${duration.toFixed(1)}s`);
-      
+      // Initialize counters
       if (CaptureEngine && CaptureEngine.updateFrameCountAndProgress) {
         setTimeout(() => CaptureEngine.updateFrameCountAndProgress(), 100);
       }
       
+      // Start preview
       if (CaptureEngine && CaptureEngine.startPreview) {
         setTimeout(() => {
           CaptureEngine.startPreview();
-          // Update the play/pause button text
-          const playPauseBtn = document.getElementById('playPauseButton');
-          if (playPauseBtn) {
-            playPauseBtn.textContent = 'Pause';
-          }
         }, 300);
       }
     });
@@ -195,7 +282,7 @@ const MediaProcessor = {
     video.addEventListener('error', (e) => {
       clearTimeout(loadingTimeout);
       console.error('Video loading error:', e);
-      this.core.showMessage('Error loading video. Please try another file.', 'error');
+      this.core.showMessage('Error loading video. Format may not be supported.', 'error');
       this.cleanupVideoResources(video, videoURL);
     });
   },
@@ -206,11 +293,7 @@ const MediaProcessor = {
       videoElement.removeAttribute('src');
       videoElement.load();
     }
-    
-    if (videoURL) {
-      URL.revokeObjectURL(videoURL);
-    }
-    
+    if (videoURL) URL.revokeObjectURL(videoURL);
     if (this.core.state.videoObjectURL) {
       URL.revokeObjectURL(this.core.state.videoObjectURL);
       this.core.state.videoObjectURL = null;
@@ -226,69 +309,57 @@ const MediaProcessor = {
       const settings = UIManager.getSettings();
       
       if (!media || !media.width || !media.height) {
-        throw new Error('Invalid media dimensions');
+        // For video elements, use videoWidth/videoHeight
+        if (media.videoWidth && media.videoHeight) {
+           // It's a video, but processMedia usually handles images or single frames.
+           // If passed a video element directly, we might want to draw the current frame.
+        } else {
+           throw new Error('Invalid media dimensions');
+        }
       }
       
-      const asciiWidth = Math.min(settings.width, this.core.state.maxProcessingWidth);
+      // Calculate dimensions
+      // Font aspect ratio correction (courier/monospace is usually taller than wide)
+      const FONT_ASPECT_RATIO = 0.55; 
       
-      const fontAspectRatio = 0.55;
-      const asciiHeight = Math.round((media.height / media.width) * asciiWidth * fontAspectRatio);
+      const asciiWidth = Math.min(settings.width, this.core.state.maxProcessingWidth);
+      const mediaWidth = media.videoWidth || media.width;
+      const mediaHeight = media.videoHeight || media.height;
+      const asciiHeight = Math.round((mediaHeight / mediaWidth) * asciiWidth * FONT_ASPECT_RATIO);
       
       this.core.state.frameWidth = asciiWidth;
       this.core.state.frameHeight = asciiHeight;
       
+      // Get canvas
       const canvas = document.getElementById('canvas');
-      if (!canvas) {
-        throw new Error('Canvas element not found');
-      }
+      if (!canvas) throw new Error('Canvas element not found');
       
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      if (!ctx) {
-        throw new Error('Could not get canvas context');
+      
+      // Resize canvas
+      if (canvas.width !== asciiWidth || canvas.height !== asciiHeight) {
+        canvas.width = asciiWidth;
+        canvas.height = asciiHeight;
       }
-    
-    canvas.width = asciiWidth;
-    canvas.height = asciiHeight;
-    ctx.filter = settings.blur > 0 ? `blur(${settings.blur}px)` : "none";
-    ctx.drawImage(media, 0, 0, asciiWidth, asciiHeight);
-    
-    const imageData = ctx.getImageData(0, 0, asciiWidth, asciiHeight);
-    const data = imageData.data;
-    
-    const contrastFactor = (259 * (settings.contrast + 255)) / (255 * (259 - settings.contrast));
-    
-    const pixelCount = data.length / 4;
-    const gray = new Array(pixelCount);
-    const grayOriginal = settings.edgeDetection ? new Array(pixelCount) : null;
-    
-    for (let i = 0, j = 0; i < data.length; i += 4, j++) {
-      let lum = (0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2]) | 0;
       
-      if (settings.invert) lum = 255 - lum;
+      // Apply blur if needed
+      ctx.filter = settings.blur > 0 ? `blur(${settings.blur}px)` : "none";
       
-      const adjusted = Math.max(0, Math.min(255, ((contrastFactor * (lum - 128)) + 128 + settings.brightness) | 0));
+      // Draw media to canvas
+      ctx.drawImage(media, 0, 0, asciiWidth, asciiHeight);
       
-      gray[j] = adjusted;
-      if (grayOriginal) grayOriginal[j] = adjusted;
-    }
-    
-    const processedGray = settings.edgeDetection ? 
-      this.applyEdgeDetection(gray, asciiWidth, asciiHeight, 100) : gray;
-    
-    const ascii = this.generateAsciiFromGray(
-      processedGray, 
-      asciiWidth, 
-      asciiHeight, 
-      settings.ignoreWhite, 
-      settings.charset, 
-      grayOriginal, 
-      settings.edgeDetection
-    );
-    
-    if (this.core.state.currentFileType === 'image') {
-      this.core.state.frames = [ascii];
-    }
-    
+      // Get pixel data
+      const imageData = ctx.getImageData(0, 0, asciiWidth, asciiHeight);
+      
+      // Process pixels to ASCII
+      const ascii = this.convertToAscii(imageData, settings);
+      
+      // Update state
+      if (this.core.state.currentFileType === 'image') {
+        this.core.state.frames = [ascii];
+      }
+      
+      // Update DOM
       document.getElementById('ascii-art').textContent = ascii;
       
       return ascii;
@@ -299,256 +370,170 @@ const MediaProcessor = {
     }
   },
   
+  // Helper for video frames (avoids resizing canvas repeatedly if dimensions match)
   processFrame(imageData) {
     const settings = UIManager.getSettings();
-    let asciiWidth = settings.width;
-    asciiWidth = Math.min(asciiWidth, this.core.state.maxProcessingWidth);
-    
-    const fontAspectRatio = 0.55;
-    const srcWidth = imageData.width;
-    const srcHeight = imageData.height;
-    
-    const asciiHeight = Math.floor((srcHeight / srcWidth) * asciiWidth * fontAspectRatio);
-    
-    this.core.state.frameWidth = asciiWidth;
-    this.core.state.frameHeight = asciiHeight;
-    
-    if (!this._contrastFactor || this._lastContrastValue !== settings.contrast) {
-      this._lastContrastValue = settings.contrast;
-      this._contrastFactor = (259 * (settings.contrast + 255)) / (255 * (259 - settings.contrast));
-    }
-    const contrastFactor = this._contrastFactor;
-    
-    if (this.core.state.tempCanvas.width !== asciiWidth) this.core.state.tempCanvas.width = asciiWidth;
-    if (this.core.state.tempCanvas.height !== asciiHeight) this.core.state.tempCanvas.height = asciiHeight;
-    if (this.core.state.originalCanvas.width !== srcWidth) this.core.state.originalCanvas.width = srcWidth;
-    if (this.core.state.originalCanvas.height !== srcHeight) this.core.state.originalCanvas.height = srcHeight;
-    
-    this.core.state.originalCtx.putImageData(imageData, 0, 0);
-    this.core.state.tempCtx.drawImage(this.core.state.originalCanvas, 0, 0, asciiWidth, asciiHeight);
-    
-    const scaledImageData = this.core.state.tempCtx.getImageData(0, 0, asciiWidth, asciiHeight);
-    const scaledPixels = scaledImageData.data;
-    const pixelCount = scaledPixels.length / 4;
-    
-    const gray = new Uint8Array(pixelCount);
-    
-    const rWeight = 0.299;
-    const gWeight = 0.587;
-    const bWeight = 0.114;
-    
-    const shouldInvert = settings.invert;
-    const brightness = settings.brightness;
-    
-    for (let i = 0, j = 0; i < scaledPixels.length; i += 4, j++) {
-      let lum = ((rWeight * scaledPixels[i]) + (gWeight * scaledPixels[i+1]) + (bWeight * scaledPixels[i+2])) | 0;
-      
-      if (shouldInvert) lum = 255 - lum;
-      
-      const adjusted = Math.max(0, Math.min(255, ((contrastFactor * (lum - 128)) + 128 + brightness) | 0));
-      gray[j] = adjusted;
-    }
-    
-    const processedGray = settings.edgeDetection ? 
-      this.applyEdgeDetection(gray, asciiWidth, asciiHeight, 100) : gray;
-    
-    const asciiFrame = this.generateAsciiFromGray(
-      processedGray, 
-      asciiWidth, 
-      asciiHeight, 
-      settings.ignoreWhite, 
-      settings.charset
-    );
-    
-    return asciiFrame;
+    return this.convertToAscii(imageData, settings);
   },
   
-  // =============================================================================
-  // ASCII CONVERSION UTILITIES
-  // =============================================================================
-  
-  charCache: new Map(),
-  
-  generateAsciiFromGray(gray, width, height, ignoreWhite, charset = 'binary', grayOriginal = null, isEdgeDetection = false) {
-    charset = charset || 'binary';
+  convertToAscii(imageData, settings) {
+    const { width, height, data } = imageData;
+    const pixelCount = width * height;
     
+    // Pre-calculate contrast factor
+    // Formula: factor = (259 * (contrast + 255)) / (255 * (259 - contrast))
+    const contrast = settings.contrast;
+    const contrastFactor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+    const brightness = settings.brightness;
+    
+    // Grayscale buffer
+    const gray = new Uint8Array(pixelCount);
+    const grayOriginal = settings.edgeDetection ? new Uint8Array(pixelCount) : null;
+    
+    // Weights for RGB to Grayscale (Luma)
+    const R_WEIGHT = 0.299;
+    const G_WEIGHT = 0.587;
+    const B_WEIGHT = 0.114;
+    
+    for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+      const r = data[i];
+      const g = data[i+1];
+      const b = data[i+2];
+      
+      // Calculate luminance
+      let lum = (R_WEIGHT * r + G_WEIGHT * g + B_WEIGHT * b) | 0;
+      
+      // Invert if needed
+      if (settings.invert) lum = 255 - lum;
+      
+      // Apply contrast and brightness
+      // Formula: factor * (color - 128) + 128 + brightness
+      let adjusted = (contrastFactor * (lum - 128) + 128 + brightness) | 0;
+      
+      // Clamp to 0-255
+      adjusted = adjusted < 0 ? 0 : (adjusted > 255 ? 255 : adjusted);
+      
+      gray[j] = adjusted;
+      if (grayOriginal) grayOriginal[j] = adjusted;
+    }
+    
+    // Apply Edge Detection if enabled
+    const processedGray = settings.edgeDetection ? 
+      this.applyEdgeDetection(gray, width, height, 100) : gray;
+    
+    // Map pixels to characters
+    return this.mapPixelsToChars(
+      processedGray, 
+      width, 
+      height, 
+      settings.ignoreWhite, 
+      settings.charset, 
+      grayOriginal, 
+      settings.edgeDetection
+    );
+  },
+  
+  mapPixelsToChars(gray, width, height, ignoreWhite, charset, grayOriginal, isEdgeDetection) {
+    // Get gradient string based on charset
     let gradient = this.core.state.cachedGradients[charset];
     if (!gradient) {
-      gradient = charset === 'blocks' ? "█▓▒░ " : "10";
+      switch(charset) {
+        case 'blocks': gradient = "█▓▒░ "; break;
+        case 'standard': gradient = "@%#*+=-:. "; break;
+        case 'simple': gradient = " .:-=+*#%@"; break; // Reversed for light-on-dark usually
+        case 'binary': default: gradient = "10"; break;
+      }
       this.core.state.cachedGradients[charset] = gradient;
     }
     
     const nLevels = gradient.length;
-    const whiteCutoff = 250;
-    const sourceGray = grayOriginal || gray;
     const scaleFactor = (nLevels - 1) / 255;
+    const WHITE_CUTOFF = 250; // Threshold for "pure white" to be transparent/space
     
-    const cacheKey = `${charset}_${whiteCutoff}_${ignoreWhite}_${isEdgeDetection}`;
-    
+    // Cache mapping array for this specific configuration
+    const cacheKey = `${charset}_${ignoreWhite}_${nLevels}`;
     let charMapping = this.charCache.get(cacheKey);
+    
     if (!charMapping) {
       charMapping = new Array(256);
       for (let i = 0; i < 256; i++) {
-        if (ignoreWhite && i >= whiteCutoff) {
-          charMapping[i] = ' ';
+        if (ignoreWhite && i >= WHITE_CUTOFF) {
+          charMapping[i] = ' '; // Transparent/Space
         } else {
-          const level = Math.min(nLevels - 1, (i * scaleFactor + 0.5) | 0);
+          // Map 0-255 to 0-(nLevels-1)
+          const level = Math.min(nLevels - 1, Math.max(0, (i * scaleFactor + 0.5) | 0));
           charMapping[i] = gradient[level];
         }
       }
       this.charCache.set(cacheKey, charMapping);
     }
     
-    const resultArray = new Array(height * (width + 1) - 1);
-    let resultIndex = 0;
+    // Build the ASCII string
+    // We use a single array join for performance instead of string concatenation
+    const result = new Array(height);
+    const sourceGray = isEdgeDetection ? grayOriginal : gray; // Use original for color/intensity if needed, but here we map the processed gray
     
-    const stride = width;
+    // Actually, if edge detection is ON, 'gray' contains the edges (0 or 255).
+    // If we want to mix edges with original image, logic would be more complex.
+    // For now, we just map the 'gray' buffer which is either the adjusted image or the edge map.
     
+    let offset = 0;
     for (let y = 0; y < height; y++) {
-      const rowOffset = y * stride;
-      const rowEnd = rowOffset + width;
-      
-      for (let i = rowOffset; i < rowEnd; i++) {
-        resultArray[resultIndex++] = charMapping[isEdgeDetection ? sourceGray[i] : gray[i]];
+      let row = "";
+      for (let x = 0; x < width; x++) {
+        row += charMapping[gray[offset++]];
       }
-      
-      if (y < height - 1) {
-        resultArray[resultIndex++] = '\n';
-      }
+      result[y] = row;
     }
     
-    return resultArray.join('');
+    return result.join('\n');
   },
   
-  edgeCache: new Map(),
-  
   applyEdgeDetection(gray, width, height, threshold) {
-    const bufferHash = this._hashArrayBuffer(gray.buffer || gray);
-    const cacheKey = `${bufferHash}_${width}_${height}_${threshold}`;
-    
-    if (this.edgeCache.has(cacheKey)) {
-      return this.edgeCache.get(cacheKey);
-    }
+    // Simple Sobel operator or similar could go here.
+    // For brevity and performance, using a simplified difference check.
+    // (Reusing the logic from the original file but cleaned up)
     
     const size = width * height;
     const edges = new Uint8Array(size);
+    edges.fill(255); // Default to white (no edge)
     
-    edges.fill(255);
+    // Sobel kernels
+    // Gx = [-1 0 1]
+    //      [-2 0 2]
+    //      [-1 0 1]
+    // Gy = [-1 -2 -1]
+    //      [ 0  0  0]
+    //      [ 1  2  1]
     
-    const normFactor = 255 / 1442;
-    const normalizedThreshold = threshold / normFactor;
-    
-    const useParallel = size > 100000 && typeof SharedArrayBuffer !== 'undefined';
-    
-    if (useParallel && window.Worker) {
-    }
-    
-    const canUseSIMD = typeof Float32Array.prototype.map === 'function';
-    
-    const widthMinus1 = width - 1;
-    const heightMinus1 = height - 1;
-    
-    const sobelMultiplier = 2;
-    
-    for (let y = 1; y < heightMinus1; y++) {
-      const rowIdx = y * width;
-      const prevRowIdx = rowIdx - width;
-      const nextRowIdx = rowIdx + width;
-      
-      const xLimit = widthMinus1 - 3;
-      
-      let x = 1;
-      
-      for (; x < xLimit; x += 4) {
-        for (let i = 0; i < 4; i++) {
-          const xPos = x + i;
-          const idx = rowIdx + xPos;
-          
-          const topLeft = gray[prevRowIdx + (xPos - 1)];
-          const top = gray[prevRowIdx + xPos];
-          const topRight = gray[prevRowIdx + (xPos + 1)];
-          const left = gray[rowIdx + (xPos - 1)];
-          const right = gray[rowIdx + (xPos + 1)];
-          const bottomLeft = gray[nextRowIdx + (xPos - 1)];
-          const bottom = gray[nextRowIdx + xPos];
-          const bottomRight = gray[nextRowIdx + (xPos + 1)];
-          
-          const Gx = (-topLeft + topRight - (left * sobelMultiplier) + (right * sobelMultiplier) - bottomLeft + bottomRight) | 0;
-          const Gy = (-topLeft - (top * sobelMultiplier) - topRight + bottomLeft + (bottom * sobelMultiplier) + bottomRight) | 0;
-          
-          const absGx = Math.abs(Gx);
-          const absGy = Math.abs(Gy);
-          
-          let magVal;
-          if (absGx + absGy < 100) {
-            magVal = ((absGx + absGy) * 1.2) | 0;
-          } else {
-            magVal = Math.sqrt(Gx * Gx + Gy * Gy);
-          }
-          
-          edges[idx] = magVal > normalizedThreshold ? 0 : 255;
-        }
-      }
-      
-      for (; x < widthMinus1; x++) {
-        const idx = rowIdx + x;
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        const i = y * width + x;
         
-        const topLeft = gray[prevRowIdx + (x - 1)];
-        const top = gray[prevRowIdx + x];
-        const topRight = gray[prevRowIdx + (x + 1)];
-        const left = gray[rowIdx + (x - 1)];
-        const right = gray[rowIdx + (x + 1)];
-        const bottomLeft = gray[nextRowIdx + (x - 1)];
-        const bottom = gray[nextRowIdx + x];
-        const bottomRight = gray[nextRowIdx + (x + 1)];
+        // Neighbors
+        const tl = gray[i - width - 1];
+        const t  = gray[i - width];
+        const tr = gray[i - width + 1];
+        const l  = gray[i - 1];
+        const r  = gray[i + 1];
+        const bl = gray[i + width - 1];
+        const b  = gray[i + width];
+        const br = gray[i + width + 1];
         
-        const Gx = (-topLeft + topRight - (left * sobelMultiplier) + (right * sobelMultiplier) - bottomLeft + bottomRight) | 0;
-        const Gy = (-topLeft - (top * sobelMultiplier) - topRight + bottomLeft + (bottom * sobelMultiplier) + bottomRight) | 0;
+        const gx = (-tl + tr - 2*l + 2*r - bl + br);
+        const gy = (-tl - 2*t - tr + bl + 2*b + br);
         
-        const absGx = Math.abs(Gx);
-        const absGy = Math.abs(Gy);
+        const mag = Math.sqrt(gx*gx + gy*gy);
         
-        let magVal;
-        if (absGx + absGy < 100) {
-          magVal = ((absGx + absGy) * 1.2) | 0;
-        } else {
-          magVal = Math.sqrt(Gx * Gx + Gy * Gy);
-        }
-        
-        edges[idx] = magVal > normalizedThreshold ? 0 : 255;
+        // If magnitude > threshold, it's an edge (black=0), else white=255
+        edges[i] = mag > threshold ? 0 : 255;
       }
     }
-    
-    if (this.edgeCache.size > 10) {
-      const firstKey = this.edgeCache.keys().next().value;
-      this.edgeCache.delete(firstKey);
-    }
-    
-    this.edgeCache.set(cacheKey, edges);
     
     return edges;
   },
   
-  _hashArrayBuffer(buffer) {
-    const data = new Uint8Array(buffer);
-    const sampleSize = Math.min(data.length, 1000);
-    const sampleStep = Math.max(1, Math.floor(data.length / sampleSize));
-    
-    let hash = 0;
-    for (let i = 0; i < data.length; i += sampleStep) {
-      hash = ((hash << 5) - hash) + data[i];
-      hash = hash & hash;
-    }
-    return hash;
-  },
-  
-  // =============================================================================
-  // INITIALIZATION HELPERS
-  // =============================================================================
-  
   loadDefaultImage() {
-    this.core.updateStatusMessage("Ready to process images and videos. Upload a file to begin.");
-    document.getElementById('startExport').disabled = true;
-    document.getElementById('previewAnimation').disabled = true;
+    this.core.updateStatusMessage("Ready to process images and videos.");
   }
 };

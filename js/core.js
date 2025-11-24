@@ -19,7 +19,13 @@ const ASCIIfy = {
     originalCtx: null,
     previewInterval: null,
     theme: 'dark',
-    hasExportCapture: false
+    hasExportCapture: false,
+
+    // GIF State
+    gifFrames: [],
+    currentGifFrameIndex: 0,
+    isGifPlaying: false,
+    gifInterval: null
   },
 
   init() {
@@ -29,11 +35,6 @@ const ASCIIfy = {
     if (UIManager) UIManager.init(this);
     if (CaptureEngine) CaptureEngine.init(this);
     if (ExportManager) ExportManager.init(this);
-    
-    const storedTheme = localStorage.getItem('asciiTheme');
-    if (storedTheme) {
-      this.setTheme(storedTheme);
-    }
   },
 
   setupCanvases() {
@@ -100,12 +101,6 @@ const ASCIIfy = {
     };
   },
   
-  setTheme(theme) {
-    this.state.theme = theme;
-    document.body.classList.toggle('light-mode', theme === 'light');
-    localStorage.setItem('asciiTheme', theme);
-  },
-  
   clearWorkspace() {
     if (confirm('Clear everything and start fresh?')) {
       if (this.state.isPlaying && CaptureEngine) {
@@ -129,15 +124,21 @@ const ASCIIfy = {
       this.state.currentMedia = null;
       this.state.currentFileType = null;
       
+      // Clear GIF State
+      if (this.state.gifInterval) {
+        clearInterval(this.state.gifInterval);
+        this.state.gifInterval = null;
+      }
+      this.state.gifFrames = [];
+      this.state.isGifPlaying = false;
+      this.state.currentGifFrameIndex = 0;
+      
       document.getElementById('ascii-art').textContent = "";
       this.updateStatusMessage("Workspace cleared. Please upload an image or video to begin.");
       
-      const existingIndicator = document.querySelector('.file-type-indicator');
-      if (existingIndicator) {
-        existingIndicator.remove();
-      }
+      // Reset UI State
+      UIManager.toggleContentState(false);
       
-      document.getElementById('playbackControls').style.display = 'none';
       document.getElementById('startExport').disabled = true;
       
       if (CaptureEngine) {
@@ -153,7 +154,7 @@ const ASCIIfy = {
         if (exportStatus) {
           const statusIndicator = exportStatus.querySelector('.status-indicator');
           if (statusIndicator) statusIndicator.className = 'status-indicator empty';
-          exportStatus.querySelector('span').textContent = 'No animation captured for export yet';
+          exportStatus.querySelector('span').textContent = 'No capture data';
         }
       }
       

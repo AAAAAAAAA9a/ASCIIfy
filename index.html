@@ -1,223 +1,357 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ASCIIfy</title>
-  <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="css/video-controls.css">
-</head>
-<body>
-  <div class="layout">
-    <aside class="sidebar">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ASCIIfy | Premium ASCII Art Generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div class="bg-animation"></div>
+    <div class="app-container">
+      <!-- SIDEBAR -->
+      <aside class="sidebar glass-panel">
+        <div class="sidebar-header">
+          <h1 class="logo">ASCIIfy</h1>
+        </div>
 
-      <section class="control-group theme-section">
-        <div class="control theme-control">
-          <label for="theme">Theme:</label>
-          <select id="theme">
-            <option value="dark" selected>Dark</option>
-            <option value="light">Light</option>
-          </select>
-        </div>
-      </section>
-      
-      <!-- 1. UPLOAD SECTION -->
-      <section class="control-group upload-group">
-        <h3>1. Upload File</h3>
-        <div class="drop-zone unified-drop-zone">
-          <p>Drop image, video, or GIF here or click to browse</p>
-          <input type="file" id="unifiedInput" accept="image/*,video/*" style="position: absolute; opacity: 0; width: 100%; height: 100%; top: 0; left: 0; cursor: pointer;">
-        </div>
-      </section>
-      
-      <!-- 2. PLAYBACK CONTROLS (for videos/gifs) -->
-      <section class="control-group playback-controls" id="playbackControls" style="display: none;">
-        <h3>2. Playback</h3>
-        <div class="playback-section">
-          <div class="playback-buttons">
-            <button id="playPauseButton" class="primary-button">Play</button>
-            <div class="control loop-control">
-              <input type="checkbox" id="loopPlayback" checked>
-              <label for="loopPlayback">Loop</label>
+        <div class="sidebar-content custom-scrollbar">
+          <!-- 1. ADJUSTMENTS -->
+          <section class="control-group">
+            <div class="group-header">
+              <h3>Adjustments</h3>
             </div>
-          </div>
-          <div class="capture-section">
-            <button id="captureAnimation" class="action-button">Capture Animation</button>
-            <button id="stopCapture" style="display: none;">Stop Capture</button>
-            <div id="captureProgress" class="progress-container" style="display: none;">
-              <div class="progress-bar">
-                <div id="captureProgressFill" class="progress-fill"></div>
+            <div class="group-content">
+              <!-- Display Settings -->
+              <div class="control-row">
+                <label for="asciiWidth">Width</label>
+                <div class="range-wrapper">
+                  <input
+                    type="range"
+                    id="asciiWidth"
+                    min="20"
+                    max="500"
+                    value="150"
+                  />
+                  <span class="value-badge" id="asciiWidthVal">150</span>
+                </div>
               </div>
-              <span id="captureProgressText">0%</span>
-            </div>
-            <div class="capture-info">
-              <span id="frameCounter">0 frames</span>
-              <span id="durationCounter">0.0s</span>
-            </div>
-            <div class="capture-status" id="captureStatus">
-              <div class="status-indicator"></div>
-              <span>Ready to capture</span>
-            </div>
-          </div>
-        </div>
-      </section>
-      
-      <!-- 3. SETTINGS -->
-      <section class="control-group settings-group">
-        <h3 class="collapsible active">3. Settings</h3>
-        <div class="collapsible-content show">
-          <!-- Display Settings -->
-          <div class="settings-group">
-            <h4>Display</h4>
-            <div class="control">
-              <label for="asciiWidth">Width (chars):</label>
-              <input type="range" id="asciiWidth" min="20" max="500" value="150">
-              <span class="value-label" id="asciiWidthVal">150</span>
-            </div>
-            <div class="control">
-              <label for="zoom">Zoom (%):</label>
-              <input type="range" id="zoom" min="5" max="200" value="100">
-              <span class="value-label" id="zoomVal">100</span>
-            </div>
-            <div class="control">
-              <label for="charset">Character Set:</label>
-              <select id="charset">
-                <option value="binary" selected>Binary (0, 1)</option>
-                <option value="blocks">Blocks (█▓▒░ )</option>
-              </select>
-            </div>
-          </div>
-          
-          <!-- Image Processing -->
-          <div class="settings-group">
-            <h4>Image Processing</h4>
-            <div class="control">
-              <label for="brightness">Brightness:</label>
-              <input type="range" id="brightness" min="-100" max="100" value="0">
-              <span class="value-label" id="brightnessVal">0</span>
-            </div>
-            <div class="control">
-              <label for="contrast">Contrast:</label>
-              <input type="range" id="contrast" min="-100" max="100" value="0">
-              <span class="value-label" id="contrastVal">0</span>
-            </div>
-            <div class="control">
-              <label for="blur">Blur (px):</label>
-              <input type="range" id="blur" min="0" max="10" step="0.01" value="0">
-              <span class="value-label" id="blurVal">0</span>
-            </div>
-            <div class="control checkbox-control">
-              <input type="checkbox" id="enableEdgeDetection">
-              <label for="enableEdgeDetection">Edge Detection</label>
-            </div>
-            <div class="control checkbox-control">
-              <input type="checkbox" id="invert">
-              <label for="invert">Invert Colors</label>
-            </div>
-            <div class="control checkbox-control">
-              <input type="checkbox" id="ignoreWhite" checked>
-              <label for="ignoreWhite">Ignore Pure White</label>
-            </div>
-          </div>
-          
-          <!-- Animation Settings -->
-          <div class="settings-group">
-            <h4>Animation</h4>
-            <div class="control">
-              <label for="exportFPS">Frame Rate (FPS):</label>
-              <input type="number" id="exportFPS" min="1" max="60" value="30">
-            </div>
-          </div>
-        </div>
-      </section>
 
-      <!-- 4. PREVIEW -->
-      <section class="control-group preview-group">
-        <h3 class="collapsible active">4. Preview</h3>
-        <div class="collapsible-content show">
-          <div class="preview-controls">
-            <button id="previewAnimation" disabled>Preview Captured Animation</button>
-            <button id="stopAnimationPreview" disabled style="display: none;">Stop Preview</button>
-            <div class="control checkbox-control">
-              <input type="checkbox" id="loopPreview" checked>
-              <label for="loopPreview">Loop Preview</label>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- 5. EXPORT & IMPORT -->
-      <section class="control-group export-import-group">
-        <h3 class="collapsible">5. Export & Import</h3>
-        <div class="collapsible-content">
-          <!-- Export Section -->
-          <div class="export-section">
-            <h4>Export Animation</h4>
-            <div class="export-status" id="exportStatus">
-              <div class="status-indicator empty"></div>
-              <span>No animation captured yet</span>
-            </div>
-            <div class="control">
-              <label for="exportFormat">Format:</label>
-              <select id="exportFormat">
-                <option value="json" selected>JSON</option>
-                <option value="js">JavaScript Module</option>
-                <option value="jpg">JPEG Image</option>
-              </select>
-            </div>
-            <div class="control">
-              <label for="exportMode">Mode:</label>
-              <select id="exportMode">
-                <option value="single" selected>Single File</option>
-                <option value="separate">ZIP Archive</option>
-                <option value="preview">Preview Only</option>
-              </select>
-            </div>
-            <button id="startExport" disabled>Export</button>
-            <div id="exportProgress" style="display: none;">
-              <div id="progressBar">
-                <div id="progressFill"></div>
+              <div class="control-row">
+                <label for="zoom">Zoom</label>
+                <div class="range-wrapper">
+                  <input type="range" id="zoom" min="5" max="200" value="100" />
+                  <span class="value-badge" id="zoomVal">100%</span>
+                </div>
               </div>
-              <span id="progressText">0%</span>
+
+              <div class="control-row">
+                <label for="charset">Charset</label>
+                <select id="charset" class="glass-select">
+                  <option value="binary" selected>Binary (0, 1)</option>
+                  <option value="blocks">Blocks (█▓▒░ )</option>
+                  <option value="standard">Standard (@%#*+=-:. )</option>
+                  <option value="simple">Simple ( .:-=+*#%@)</option>
+                </select>
+              </div>
+
+              <div class="separator"></div>
+
+              <!-- Image Processing -->
+              <div class="control-row">
+                <label for="brightness">Brightness</label>
+                <div class="range-wrapper">
+                  <input
+                    type="range"
+                    id="brightness"
+                    min="-100"
+                    max="100"
+                    value="0"
+                  />
+                  <span class="value-badge" id="brightnessVal">0</span>
+                </div>
+              </div>
+
+              <div class="control-row">
+                <label for="contrast">Contrast</label>
+                <div class="range-wrapper">
+                  <input
+                    type="range"
+                    id="contrast"
+                    min="-100"
+                    max="100"
+                    value="0"
+                  />
+                  <span class="value-badge" id="contrastVal">0</span>
+                </div>
+              </div>
+
+              <div class="control-row">
+                <label for="blur">Blur</label>
+                <div class="range-wrapper">
+                  <input
+                    type="range"
+                    id="blur"
+                    min="0"
+                    max="10"
+                    step="0.01"
+                    value="0"
+                  />
+                  <span class="value-badge" id="blurVal">0</span>
+                </div>
+              </div>
+
+              <div class="toggles-row">
+                <div class="checkbox-wrapper">
+                  <input type="checkbox" id="enableEdgeDetection" />
+                  <label for="enableEdgeDetection">Edges</label>
+                </div>
+                <div class="checkbox-wrapper">
+                  <input type="checkbox" id="invert" />
+                  <label for="invert">Invert</label>
+                </div>
+                <div class="checkbox-wrapper">
+                  <input type="checkbox" id="ignoreWhite" checked />
+                  <label for="ignoreWhite">No White</label>
+                </div>
+              </div>
             </div>
-          </div>
-          
-          <!-- Import Section -->
-          <div class="import-section">
-            <h4>Import Animation</h4>
-            <div class="drop-zone mini-drop-zone">
-              <p>Drop exported JSON/JS file here</p>
-              <input type="file" id="importFile" accept=".json,.js" style="position: absolute; opacity: 0; width: 100%; height: 100%; top: 0; left: 0; cursor: pointer;">
+          </section>
+
+          <!-- 2. EXPORT -->
+          <section class="control-group">
+            <div class="group-header">
+              <h3>Export</h3>
             </div>
-            <div class="import-controls">
-              <button id="previewImportedAnimation" disabled>Preview Imported</button>
-              <button id="stopImportedPreview" disabled style="display: none;">Stop</button>
+            <div class="group-content">
+              <div class="control-row">
+                <label for="exportFPS">FPS</label>
+                <input
+                  type="number"
+                  id="exportFPS"
+                  class="glass-input"
+                  min="1"
+                  max="60"
+                  value="30"
+                />
+              </div>
+
+              <div class="control-row">
+                <label for="exportFormat">Format</label>
+                <select id="exportFormat" class="glass-select">
+                  <option value="json" selected>JSON</option>
+                  <option value="js">JS Module</option>
+                  <option value="jpg">JPEG Image</option>
+                </select>
+              </div>
+
+              <div class="control-row">
+                <label for="exportMode">Mode</label>
+                <select id="exportMode" class="glass-select">
+                  <option value="single" selected>Single File</option>
+                  <option value="separate">ZIP Archive</option>
+                  <option value="preview">Preview Only</option>
+                </select>
+              </div>
+
+              <div class="action-buttons-grid">
+                <button id="startExport" class="glass-button primary" disabled>
+                  Export
+                </button>
+                <button
+                  id="previewAnimation"
+                  class="glass-button secondary"
+                  disabled
+                >
+                  Preview
+                </button>
+                <button
+                  id="stopAnimationPreview"
+                  class="glass-button danger"
+                  disabled
+                  style="display: none"
+                >
+                  Stop
+                </button>
+              </div>
+
+              <div
+                id="exportProgress"
+                class="progress-container"
+                style="display: none"
+              >
+                <div class="progress-bar">
+                  <div id="progressFill" class="progress-fill"></div>
+                </div>
+                <span id="progressText" class="progress-text">0%</span>
+              </div>
+
+              <div class="export-status" id="exportStatus">
+                <div class="status-indicator empty"></div>
+                <span>No capture data</span>
+              </div>
             </div>
+          </section>
+
+          <!-- 3. ACTIONS -->
+          <section class="control-group">
+            <div class="action-buttons-grid">
+              <button id="reset" class="glass-button">Reset</button>
+              <button id="clearExportFrames" class="glass-button">
+                Clear Frames
+              </button>
+              <button id="clearWorkspace" class="glass-button danger">
+                Clear All
+              </button>
+            </div>
+          </section>
+
+          <!-- Hidden/Legacy Sections maintained for ID compatibility if needed, or repurposed -->
+          <div style="display: none">
+            <!-- Import Section Hidden for now, can be revived if needed -->
+            <input type="file" id="importFile" accept=".json,.js" />
+            <button id="previewImportedAnimation">Preview Imported</button>
+            <button id="stopImportedPreview">Stop</button>
+            <input type="checkbox" id="loopPreview" checked />
           </div>
         </div>
-      </section>
-      
-      <section class="control-group action-buttons-section">
-        <div class="control action-buttons">
-          <button id="reset">Reset Settings</button>
-          <button id="clearExportFrames">Clear Export Frames</button>
-          <button id="clearWorkspace" class="danger-button">Clear All</button>
+      </aside>
+
+      <!-- MAIN CONTENT -->
+      <main class="main-content">
+        <!-- HERO DROP ZONE -->
+        <div class="drop-zone-container">
+          <div class="drop-zone glass-panel unified-drop-zone" id="dropZone">
+            <div class="drop-content">
+              <div class="icon-upload">
+                <svg
+                  width="48"
+                  height="48"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+              </div>
+              <h3>Upload Media</h3>
+              <p>Drag & drop image, video, or GIF</p>
+              <button
+                class="glass-button small"
+                onclick="document.getElementById('unifiedInput').click()"
+              >
+                Browse Files
+              </button>
+            </div>
+            <input
+              type="file"
+              id="unifiedInput"
+              accept="image/*,video/*"
+              style="display: none"
+            />
+          </div>
         </div>
-      </section>
-    </aside>
-    
-    <main class="main-content">
-      <div id="notificationArea" class="notification-area"></div>
-      <pre id="ascii-art"></pre>
-    </main>
-  </div>
-  
-  <canvas id="canvas" style="display: none;"></canvas>
-  <canvas id="videoCanvas" style="display: none;"></canvas>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="js/core.js"></script>
-  <script src="js/media-processor.js"></script>
-  <script src="js/ui-manager.js"></script>
-  <script src="js/capture-engine.js"></script>
-  <script src="js/export-manager.js"></script>
-</body>
+
+        <!-- NOTIFICATIONS -->
+        <div id="notificationArea" class="notification-toast"></div>
+
+        <!-- ASCII OUTPUT -->
+        <div class="ascii-wrapper custom-scrollbar">
+          <pre id="ascii-art"></pre>
+        </div>
+
+        <!-- FLOATING PLAYBACK CONTROLS -->
+        <div
+          class="floating-controls glass-panel"
+          id="playbackControls"
+          style="display: none"
+        >
+          <div class="playback-info">
+            <span id="frameCounter">0 frames</span>
+            <span class="divider">|</span>
+            <span id="durationCounter">0.0s</span>
+          </div>
+
+          <div class="playback-actions">
+            <button id="playPauseButton" class="glass-button icon-only">
+              <!-- Play Icon -->
+              <svg
+                class="play-icon"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+            </button>
+
+            <button id="captureAnimation" class="glass-button accent">
+              <span>Capture</span>
+            </button>
+            <button
+              id="stopCapture"
+              class="glass-button danger"
+              style="display: none"
+            >
+              Stop
+            </button>
+
+            <div class="toggle-wrapper">
+              <input type="checkbox" id="loopPlayback" checked />
+              <label for="loopPlayback" title="Loop Video">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M17 1l4 4-4 4"></path>
+                  <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+                  <path d="M7 23l-4-4 4-4"></path>
+                  <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+                </svg>
+              </label>
+            </div>
+          </div>
+
+          <div id="captureProgress" class="mini-progress" style="display: none">
+            <div id="captureProgressFill" class="mini-progress-fill"></div>
+          </div>
+
+          <div class="capture-status" id="captureStatus" style="display: none">
+            <div class="status-indicator"></div>
+            <span>Ready</span>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Hidden Canvases -->
+    <canvas id="canvas" style="display: none"></canvas>
+    <canvas id="videoCanvas" style="display: none"></canvas>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script>
+      var exports = {};
+    </script>
+    <script src="https://unpkg.com/omggif@1.0.10/omggif.js"></script>
+    <script src="js/core.js"></script>
+    <script src="js/media-processor.js"></script>
+    <script src="js/ui-manager.js"></script>
+    <script src="js/capture-engine.js"></script>
+    <script src="js/export-manager.js"></script>
+  </body>
 </html>
