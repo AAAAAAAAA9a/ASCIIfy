@@ -107,8 +107,12 @@ const UIManager = {
       "brightness",
       "contrast",
       "blur",
+      "gamma",
+      "threshold",
+      "edgeThreshold",
       "invert",
       "ignoreWhite",
+      "dithering",
       "zoom",
     ];
     controls.forEach((id) => {
@@ -175,15 +179,7 @@ const UIManager = {
     }
 
     // Export buttons
-    const previewImportedBtn = document.getElementById(
-      "previewImportedAnimation"
-    );
-    const stopImportedPreviewBtn = document.getElementById(
-      "stopImportedPreview"
-    );
-    if (previewImportedBtn)
-      previewImportedBtn.disabled = !ExportManager?.state?.importedAnimation;
-    if (stopImportedPreviewBtn) stopImportedPreviewBtn.disabled = true;
+
   },
 
   updateSettings() {
@@ -195,6 +191,12 @@ const UIManager = {
       document.getElementById("contrast").value;
     document.getElementById("blurVal").textContent =
       document.getElementById("blur").value;
+    document.getElementById("gammaVal").textContent =
+      document.getElementById("gamma").value;
+    document.getElementById("thresholdVal").textContent =
+      document.getElementById("threshold").value;
+    document.getElementById("edgeThresholdVal").textContent =
+      document.getElementById("edgeThreshold").value;
     document.getElementById("zoomVal").textContent =
       document.getElementById("zoom").value + "%";
 
@@ -216,8 +218,12 @@ const UIManager = {
     document.getElementById("brightness").value = 0;
     document.getElementById("contrast").value = 0;
     document.getElementById("blur").value = 0;
+    document.getElementById("gamma").value = 1.0;
+    document.getElementById("threshold").value = 128;
+    document.getElementById("edgeThreshold").value = 50;
     document.getElementById("invert").checked = false;
     document.getElementById("ignoreWhite").checked = true;
+    document.getElementById("dithering").checked = false;
     document.getElementById("zoom").value = 100;
     document.getElementById("charset").value = "binary";
 
@@ -234,8 +240,12 @@ const UIManager = {
       brightness: parseFloat(document.getElementById("brightness").value),
       contrast: parseFloat(document.getElementById("contrast").value),
       blur: parseFloat(document.getElementById("blur").value),
+      gamma: parseFloat(document.getElementById("gamma").value),
+      threshold: parseInt(document.getElementById("threshold").value, 10),
+      edgeThreshold: parseInt(document.getElementById("edgeThreshold").value, 10),
       invert: document.getElementById("invert")?.checked || false,
       ignoreWhite: document.getElementById("ignoreWhite")?.checked || true,
+      dithering: document.getElementById("dithering")?.checked || false,
       edgeDetection:
         document.getElementById("enableEdgeDetection")?.checked || false,
     };

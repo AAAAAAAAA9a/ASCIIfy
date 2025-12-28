@@ -141,22 +141,7 @@ const ASCIIfy = {
       
       document.getElementById('startExport').disabled = true;
       
-      if (CaptureEngine) {
-        const captureStatus = document.getElementById('captureStatus');
-        const exportStatus = document.getElementById('exportStatus');
-        
-        if (captureStatus) {
-          const statusIndicator = captureStatus.querySelector('.status-indicator');
-          if (statusIndicator) statusIndicator.className = 'status-indicator';
-          captureStatus.querySelector('span').textContent = 'Ready to capture';
-        }
-        
-        if (exportStatus) {
-          const statusIndicator = exportStatus.querySelector('.status-indicator');
-          if (statusIndicator) statusIndicator.className = 'status-indicator empty';
-          exportStatus.querySelector('span').textContent = 'No capture data';
-        }
-      }
+
       
       if (ExportManager) {
         ExportManager.clearPreview();

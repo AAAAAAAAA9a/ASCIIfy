@@ -13,166 +13,128 @@ const ExportManager = {
   
   setupEventListeners() {
     document.getElementById('startExport')?.addEventListener('click', () => this.startExportFlow());
-    document.getElementById('previewAnimation')?.addEventListener('click', () => this.startPreview());
+    document.getElementById('startExport')?.addEventListener('click', () => this.startExportFlow());
+    
+    // Import JSON handling
+    const importBtn = document.getElementById('importJson');
+    const importInput = document.getElementById('importJsonInput');
+    
+    if (importBtn && importInput) {
+        importBtn.addEventListener('click', () => importInput.click());
+        importInput.addEventListener('change', (e) => this.handleJsonImport(e));
+    }
+    
     document.getElementById('stopAnimationPreview')?.addEventListener('click', () => this.stopPreview());
-    document.getElementById('clearExportFrames')?.addEventListener('click', () => this.clearExportFrames());
-    
-    // Import handling (if we re-enable it in UI)
-    const importFile = document.getElementById('importFile');
-    if (importFile) {
-      importFile.addEventListener('change', (e) => this.handleImport(e));
-    }
   },
   
-  clearExportFrames() {
-    if (confirm('Clear captured frames?')) {
-      this.core.state.exportFrames = [];
-      this.core.state.hasExportCapture = false;
-      this.updateExportStatus();
-      this.core.showMessage('Captured frames cleared.', 'info');
-    }
-  },
+
   
-  updateExportStatus() {
-    const statusEl = document.getElementById('exportStatus');
-    const startExportBtn = document.getElementById('startExport');
-    const previewBtn = document.getElementById('previewAnimation');
-    const frameCount = this.core.state.exportFrames.length;
-    
-    if (statusEl) {
-      const indicator = statusEl.querySelector('.status-indicator');
-      const text = statusEl.querySelector('span');
-      
-      if (frameCount > 0) {
-        if (indicator) indicator.className = 'status-indicator success';
-        if (text) text.textContent = `${frameCount} frames ready`;
-        if (startExportBtn) startExportBtn.disabled = false;
-        if (previewBtn) previewBtn.disabled = false;
-      } else {
-        if (indicator) indicator.className = 'status-indicator empty';
-        if (text) text.textContent = 'No capture data';
-        if (startExportBtn) startExportBtn.disabled = true;
-        if (previewBtn) previewBtn.disabled = true;
-      }
-    }
-  },
-  
-  startExportFlow() {
-    const frames = this.core.state.exportFrames;
-    if (!frames || frames.length === 0) {
-      this.core.showMessage('No frames to export. Capture video first.', 'error');
-      return;
-    }
-    
+  async startExportFlow() {
     const fps = parseInt(document.getElementById('exportFPS').value) || 30;
     const format = document.getElementById('exportFormat').value;
     const mode = document.getElementById('exportMode').value;
     
-    if (mode === 'preview') {
-      this.startPreview();
-      return;
-    }
-    
-    this.finalizeExport(fps, format, frames, mode);
-  },
-  
-  finalizeExport(targetFps, format, frames, mode) {
     const progressContainer = document.getElementById('exportProgress');
     const progressFill = document.getElementById('progressFill');
     const progressText = document.getElementById('progressText');
     
-    if (progressContainer) progressContainer.style.display = 'block';
-    
-    this.core.showMessage('Preparing export...', 'info', 0, true);
-    
-    // Use setTimeout to allow UI to update
-    setTimeout(() => {
-      try {
-        // 1. Resample frames if needed based on timestamps
-        const adjustedFrames = this.resampleFrames(frames, targetFps);
+    if (progressContainer) {
+        progressContainer.style.display = 'block';
+        progressFill.style.width = '0%';
+        progressText.textContent = '0%';
+    }
+
+    try {
+        let frames = [];
         
-        if (adjustedFrames.length === 0) {
-          throw new Error('Frame adjustment resulted in 0 frames.');
+        // 1. PROCESS / CAPTURE FRAMES
+        this.core.showMessage('Processing frames...', 'info', 0, true);
+        
+        const onProgress = (percent) => {
+            if (progressFill) progressFill.style.width = `${percent}%`;
+            if (progressText) progressText.textContent = `${percent}%`;
+        };
+
+        if (this.core.state.currentFileType === 'video') {
+            frames = await CaptureEngine.processVideo(fps, onProgress);
+        } else if (this.core.state.currentFileType === 'gif') {
+            frames = await CaptureEngine.processGif(onProgress);
+        } else if (this.core.state.currentFileType === 'image') {
+            // Single frame export
+             const ascii = document.getElementById('ascii-art').textContent;
+             frames = [{ timestamp: 0, content: ascii }];
+             onProgress(100);
+        } else {
+            throw new Error("No media loaded to export");
         }
         
-        // 2. Prepare data
+        // 2. FINALIZE (Save File)
+        this.core.showMessage('Generating file...', 'info', 0, true);
+        
+        // Add small delay to let UI render text update
+        await new Promise(r => setTimeout(r, 50));
+        
+        this.finalizeExport(fps, format, frames, mode);
+        
+    } catch (err) {
+        console.error('Export Error:', err);
+        this.core.showMessage(`Export Failed: ${err.message}`, 'error');
+    } finally {
+        if (progressContainer) progressContainer.style.display = 'none';
+        // Resume playback if it was playing? handled in capture-engine
+    }
+  },
+  
+  finalizeExport(targetFps, format, frames, mode) {
+    try {
+        // Frames are already processed at target FPS (for video) or native FPS (for gif)
+        // If GIF native FPS != Target FPS, we might simply accept the native frames 
+        // OR resample. For now, let's keep it simple: Export what we captured.
+        
         const exportData = {
           metadata: {
             fps: targetFps,
-            frameCount: adjustedFrames.length,
+            frameCount: frames.length,
             width: this.core.state.frameWidth,
             height: this.core.state.frameHeight,
             timestamp: new Date().toISOString(),
             generator: "ASCIIfy"
           },
-          frames: adjustedFrames
+          frames: frames
         };
         
-        // 3. Create file
         if (format === 'jpg') {
-           // JPEG export logic (usually for single image, but could be ZIP of JPEGs)
            if (mode === 'separate') {
-             this.createZipExport(adjustedFrames, exportData, 'jpg');
+             this.createZipExport(frames, exportData, 'jpg');
            } else {
-             // For single file mode with JPG, we can only export the current frame or first frame
-             // Or we could create a sprite sheet (out of scope for now)
-             // Let's default to exporting the current view as JPG
-             this.createImageExport(adjustedFrames, exportData, 'jpg', Date.now(), 'image');
+             this.createImageExport(frames, exportData, 'jpg', Date.now());
            }
-        } else if (mode === 'separate') {
-          this.createZipExport(adjustedFrames, exportData, format);
         } else {
           this.createSingleFileExport(exportData, format);
+          this.core.showMessage('Export complete!', 'success');
         }
         
-        if (progressContainer) progressContainer.style.display = 'none';
-        this.core.showMessage('Export complete!', 'success');
-        
-      } catch (err) {
-        console.error('Export failed:', err);
-        this.core.showMessage('Export failed: ' + err.message, 'error');
-        if (progressContainer) progressContainer.style.display = 'none';
-      }
-    }, 100);
+        // Store frames (not really needed for import flow, but good for state consistency)
+        this.core.state.exportFrames = frames;
+
+    } catch (err) {
+        throw err; // Re-throw to be caught by startExportFlow
+    }
   },
   
   resampleFrames(frames, targetFps) {
-    if (frames.length < 2) return frames;
-    
-    const duration = frames[frames.length - 1].timestamp - frames[0].timestamp;
-    const totalTargetFrames = Math.max(1, Math.floor((duration / 1000) * targetFps));
-    const interval = duration / totalTargetFrames;
-    
-    const resampled = [];
-    let currentTime = frames[0].timestamp;
-    
-    // Simple nearest neighbor interpolation based on time
-    for (let i = 0; i < totalTargetFrames; i++) {
-      const targetTime = frames[0].timestamp + (i * interval);
-      
-      // Find frame closest to targetTime
-      let closestFrame = frames[0];
-      let minDiff = Math.abs(targetTime - frames[0].timestamp);
-      
-      // Optimization: Start search from last found index could be better, but linear scan is fine for <1000 frames
-      for (let j = 0; j < frames.length; j++) {
-        const diff = Math.abs(targetTime - frames[j].timestamp);
-        if (diff < minDiff) {
-          minDiff = diff;
-          closestFrame = frames[j];
-        }
-      }
-      
-      resampled.push(closestFrame.content);
-    }
-    
-    return resampled;
+      // Deprecated/Not used if we capture at exact FPS.
+      // Keeping it if we ever need to resample existing frames.
+      return frames.map(f => f.content); 
   },
   
   createSingleFileExport(data, format) {
     let content = '';
     let mimeType = 'text/plain';
     let filename = `ascii-animation.${format}`;
+    
+    // Simplify structure for single file? 
+    // Ideally we just dump the content array or the full object.
     
     if (format === 'json') {
       content = JSON.stringify(data, null, 2);
@@ -193,26 +155,19 @@ const ExportManager = {
     const zip = new JSZip();
     const folder = zip.folder("frames");
     
-    // Add metadata
     zip.file("metadata.json", JSON.stringify(metadata, null, 2));
     
-    frames.forEach((frameContent, index) => {
+    frames.forEach((frame, index) => {
       const paddedIndex = String(index).padStart(4, '0');
+      const frameContent = frame.content;
       
       if (format === 'jpg') {
-        // Convert ASCII to Image Blob
-        // This is async, so we need to handle promises
-        // For simplicity in this synchronous flow, we might skip this or handle it differently.
-        // But since JSZip supports promises, we can do it.
-        // However, drawing text to canvas for 100s of frames might be slow.
-        // Let's warn user or implement a simple version.
-        
-        // For now, let's stick to text formats for ZIP unless requested.
-        // If format is jpg, we need to render each frame.
-        folder.file(`frame_${paddedIndex}.txt`, frameContent); // Fallback or text
+        // Would need async canvas rendering here.
+        // For now, save as text with warning or implement simple sync canvas
+        folder.file(`frame_${paddedIndex}.txt`, frameContent); 
       } else {
         folder.file(`frame_${paddedIndex}.${format === 'json' ? 'json' : 'txt'}`, 
-          format === 'json' ? JSON.stringify({ content: frameContent }) : frameContent);
+          format === 'json' ? JSON.stringify({ content: frameContent, timestamp: frame.timestamp }) : frameContent);
       }
     });
     
@@ -223,31 +178,28 @@ const ExportManager = {
     });
   },
   
-  createImageExport(frames, metadata, format, timestamp, fileType) {
-    // Exports the current (last) frame as an image
-    const asciiText = frames[frames.length - 1]; // Use last frame or current
+  createImageExport(frames, metadata, format, timestamp) {
+    const asciiText = frames[frames.length - 1].content; 
     
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     
-    // Measure text to size canvas
     const lines = asciiText.split('\n');
     const fontSize = 12;
     const lineHeight = 12;
     ctx.font = `${fontSize}px 'Courier New', monospace`;
     
-    const width = ctx.measureText(lines[0]).width + 40; // Padding
+    const width = ctx.measureText(lines[0]).width + 40; 
     const height = (lines.length * lineHeight) + 40;
     
     canvas.width = width;
     canvas.height = height;
     
-    // Redraw with correct background
-    ctx.fillStyle = '#0f0f0f'; // Dark bg
+    ctx.fillStyle = '#0f0f0f'; 
     ctx.fillRect(0, 0, width, height);
     
     ctx.font = `${fontSize}px 'Courier New', monospace`;
-    ctx.fillStyle = '#e8e8e8'; // Light text
+    ctx.fillStyle = '#e8e8e8'; 
     ctx.textBaseline = 'top';
     
     lines.forEach((line, i) => {
@@ -270,15 +222,53 @@ const ExportManager = {
     document.body.removeChild(a);
   },
   
+  async handleJsonImport(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        
+        if (!data.frames || !Array.isArray(data.frames)) {
+            throw new Error('Invalid JSON: missing "frames" array');
+        }
+        
+        // Load frames into state
+        this.core.state.exportFrames = data.frames;
+        
+        // Update FPS setting if available in metadata
+        if (data.metadata && data.metadata.fps) {
+            const fpsInput = document.getElementById('exportFPS');
+            if (fpsInput) fpsInput.value = data.metadata.fps;
+        }
+        
+        this.core.showMessage(`Imported ${data.frames.length} frames. Playing...`, 'success');
+        
+        // Show content and controls (treat as video playback)
+        UIManager.toggleContentState(true, true);
+        
+        // Start playback
+        this.startPreview();
+        
+    } catch (err) {
+        console.error('Import Error:', err);
+        this.core.showMessage(`Import Failed: ${err.message}`, 'error');
+    } finally {
+        event.target.value = ''; // Reset input
+    }
+  },
+
   startPreview() {
     const frames = this.core.state.exportFrames;
     if (!frames || frames.length === 0) return;
     
+    this.stopPreview(); // Ensure clean start
     this.state.isPreviewPlaying = true;
     
-    const previewBtn = document.getElementById('previewAnimation');
+    const importBtn = document.getElementById('importJson');
     const stopBtn = document.getElementById('stopAnimationPreview');
-    if (previewBtn) previewBtn.style.display = 'none';
+    if (importBtn) importBtn.style.display = 'none';
     if (stopBtn) stopBtn.style.display = 'inline-block';
     if (stopBtn) stopBtn.disabled = false;
     
@@ -286,15 +276,21 @@ const ExportManager = {
     const interval = 1000 / fps;
     let frameIndex = 0;
     
-    // Resample for preview to match target FPS
-    const previewFrames = this.resampleFrames(frames, fps);
-    
     this.state.previewInterval = setInterval(() => {
-      if (frameIndex >= previewFrames.length) {
+      if (!this.state.isPreviewPlaying) return; 
+
+      if (frameIndex >= frames.length) {
+        const shouldLoop = document.getElementById('loopPlayback')?.checked ?? true;
+        
+        if (!shouldLoop) {
+             this.stopPreview();
+             return;
+        }
         frameIndex = 0; // Loop
       }
       
-      document.getElementById('ascii-art').textContent = previewFrames[frameIndex];
+      const frameContent = frames[frameIndex].content || frames[frameIndex]; // Handle object or potential raw string
+      document.getElementById('ascii-art').textContent = frameContent;
       frameIndex++;
     }, interval);
   },
@@ -306,9 +302,9 @@ const ExportManager = {
       this.state.previewInterval = null;
     }
     
-    const previewBtn = document.getElementById('previewAnimation');
+    const importBtn = document.getElementById('importJson');
     const stopBtn = document.getElementById('stopAnimationPreview');
-    if (previewBtn) previewBtn.style.display = 'inline-block';
+    if (importBtn) importBtn.style.display = 'inline-block';
     if (stopBtn) stopBtn.style.display = 'none';
   }
 };

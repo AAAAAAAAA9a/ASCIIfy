@@ -107,7 +107,54 @@
                 </div>
               </div>
 
+              <div class="control-row">
+                <label for="gamma">Gamma</label>
+                <div class="range-wrapper">
+                  <input
+                    type="range"
+                    id="gamma"
+                    min="0.1"
+                    max="3.0"
+                    step="0.1"
+                    value="1.0"
+                  />
+                  <span class="value-badge" id="gammaVal">1.0</span>
+                </div>
+              </div>
+
+              <div class="control-row">
+                <label for="threshold">Threshold</label>
+                <div class="range-wrapper">
+                  <input
+                    type="range"
+                    id="threshold"
+                    min="0"
+                    max="255"
+                    value="128"
+                  />
+                  <span class="value-badge" id="thresholdVal">128</span>
+                </div>
+              </div>
+
+              <div class="control-row">
+                <label for="edgeThreshold">Edge Thresh</label>
+                <div class="range-wrapper">
+                  <input
+                    type="range"
+                    id="edgeThreshold"
+                    min="10"
+                    max="200"
+                    value="50"
+                  />
+                  <span class="value-badge" id="edgeThresholdVal">50</span>
+                </div>
+              </div>
+
               <div class="toggles-row">
+                <div class="checkbox-wrapper">
+                  <input type="checkbox" id="dithering" />
+                  <label for="dithering">Dither</label>
+                </div>
                 <div class="checkbox-wrapper">
                   <input type="checkbox" id="enableEdgeDetection" />
                   <label for="enableEdgeDetection">Edges</label>
@@ -156,7 +203,6 @@
                 <select id="exportMode" class="glass-select">
                   <option value="single" selected>Single File</option>
                   <option value="separate">ZIP Archive</option>
-                  <option value="preview">Preview Only</option>
                 </select>
               </div>
 
@@ -164,13 +210,15 @@
                 <button id="startExport" class="glass-button primary" disabled>
                   Export
                 </button>
-                <button
-                  id="previewAnimation"
-                  class="glass-button secondary"
-                  disabled
-                >
-                  Preview
+                <button id="importJson" class="glass-button secondary">
+                  Import JSON
                 </button>
+                <input
+                  type="file"
+                  id="importJsonInput"
+                  accept=".json"
+                  style="display: none"
+                />
                 <button
                   id="stopAnimationPreview"
                   class="glass-button danger"
@@ -191,11 +239,6 @@
                 </div>
                 <span id="progressText" class="progress-text">0%</span>
               </div>
-
-              <div class="export-status" id="exportStatus">
-                <div class="status-indicator empty"></div>
-                <span>No capture data</span>
-              </div>
             </div>
           </section>
 
@@ -203,9 +246,6 @@
           <section class="control-group">
             <div class="action-buttons-grid">
               <button id="reset" class="glass-button">Reset</button>
-              <button id="clearExportFrames" class="glass-button">
-                Clear Frames
-              </button>
               <button id="clearWorkspace" class="glass-button danger">
                 Clear All
               </button>
@@ -255,7 +295,7 @@
             <input
               type="file"
               id="unifiedInput"
-              accept="image/*,video/*"
+              accept="image/*,video/*,.pdf"
               style="display: none"
             />
           </div>
@@ -294,17 +334,7 @@
                 <polygon points="5 3 19 12 5 21 5 3"></polygon>
               </svg>
             </button>
-
-            <button id="captureAnimation" class="glass-button accent">
-              <span>Capture</span>
-            </button>
-            <button
-              id="stopCapture"
-              class="glass-button danger"
-              style="display: none"
-            >
-              Stop
-            </button>
+            <!-- End playPauseButton -->
 
             <div class="toggle-wrapper">
               <input type="checkbox" id="loopPlayback" checked />
@@ -325,15 +355,6 @@
               </label>
             </div>
           </div>
-
-          <div id="captureProgress" class="mini-progress" style="display: none">
-            <div id="captureProgressFill" class="mini-progress-fill"></div>
-          </div>
-
-          <div class="capture-status" id="captureStatus" style="display: none">
-            <div class="status-indicator"></div>
-            <span>Ready</span>
-          </div>
         </div>
       </main>
     </div>
@@ -344,8 +365,14 @@
 
     <!-- Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
       var exports = {};
+      // Initialize PDF.js worker
+      if (window.pdfjsLib) {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      }
     </script>
     <script src="https://unpkg.com/omggif@1.0.10/omggif.js"></script>
     <script src="js/core.js"></script>

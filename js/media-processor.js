@@ -163,8 +163,19 @@ const MediaProcessor = {
       frameCounter.textContent = `${frameIndex + 1}/${this.core.state.gifFrames.length}`;
     }
 
+    const shouldLoop = document.getElementById('loopPlayback')?.checked ?? true;
+    
     // Schedule next frame
-    this.core.state.currentGifFrameIndex = (frameIndex + 1) % this.core.state.gifFrames.length;
+    let nextIndex = frameIndex + 1;
+    if (nextIndex >= this.core.state.gifFrames.length) {
+        if (!shouldLoop) {
+            this.pauseGif();
+            return;
+        }
+        nextIndex = 0;
+    }
+    
+    this.core.state.currentGifFrameIndex = nextIndex;
     
     this.core.state.gifInterval = setTimeout(() => {
       requestAnimationFrame(() => this.renderGifLoop());
@@ -381,10 +392,11 @@ const MediaProcessor = {
     const pixelCount = width * height;
     
     // Pre-calculate contrast factor
-    // Formula: factor = (259 * (contrast + 255)) / (255 * (259 - contrast))
     const contrast = settings.contrast;
     const contrastFactor = (259 * (contrast + 255)) / (255 * (259 - contrast));
     const brightness = settings.brightness;
+    const gamma = settings.gamma || 1.0;
+    const threshold = settings.threshold || 128;
     
     // Grayscale buffer
     const gray = new Uint8Array(pixelCount);
@@ -395,6 +407,7 @@ const MediaProcessor = {
     const G_WEIGHT = 0.587;
     const B_WEIGHT = 0.114;
     
+    // 1. Convert to Grayscale & Apply Basic Adjustments
     for (let i = 0, j = 0; i < data.length; i += 4, j++) {
       const r = data[i];
       const g = data[i+1];
@@ -407,21 +420,30 @@ const MediaProcessor = {
       if (settings.invert) lum = 255 - lum;
       
       // Apply contrast and brightness
-      // Formula: factor * (color - 128) + 128 + brightness
-      let adjusted = (contrastFactor * (lum - 128) + 128 + brightness) | 0;
+      let adjusted = (contrastFactor * (lum - 128) + 128 + brightness);
+      
+      // Apply Gamma Correction
+      if (gamma !== 1.0) {
+          adjusted = 255 * Math.pow(Math.max(0, Math.min(255, adjusted)) / 255, 1 / gamma);
+      }
       
       // Clamp to 0-255
       adjusted = adjusted < 0 ? 0 : (adjusted > 255 ? 255 : adjusted);
       
-      gray[j] = adjusted;
-      if (grayOriginal) grayOriginal[j] = adjusted;
+      gray[j] = adjusted | 0;
+      if (grayOriginal) grayOriginal[j] = adjusted | 0;
     }
     
-    // Apply Edge Detection if enabled
-    const processedGray = settings.edgeDetection ? 
-      this.applyEdgeDetection(gray, width, height, 100) : gray;
+    // 2. Apply Dithering (Floyd-Steinberg) if enabled
+    if (settings.dithering) {
+        this.applyFloydSteinbergDithering(gray, width, height, settings.charset, threshold);
+    }
     
-    // Map pixels to characters
+    // 3. Apply Edge Detection if enabled
+    const processedGray = settings.edgeDetection ? 
+      this.applyEdgeDetection(gray, width, height, settings.edgeThreshold || 50) : gray;
+    
+    // 4. Map pixels to characters
     return this.mapPixelsToChars(
       processedGray, 
       width, 
@@ -429,11 +451,54 @@ const MediaProcessor = {
       settings.ignoreWhite, 
       settings.charset, 
       grayOriginal, 
-      settings.edgeDetection
+      settings.edgeDetection,
+      threshold
     );
   },
+
+  applyFloydSteinbergDithering(gray, width, height, charset, threshold) {
+      // Dithering works best when reducing color depth.
+      // For ASCII, we are reducing to the number of characters in the charset.
+      
+      // Get number of levels based on charset
+      let levels = 2; // Default binary
+      if (charset === 'blocks') levels = 5;
+      else if (charset === 'standard') levels = 10;
+      else if (charset === 'simple') levels = 10;
+      
+      const step = 255 / (levels - 1);
+      
+      for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+              const i = y * width + x;
+              const oldPixel = gray[i];
+              
+              // Quantize
+              let newPixel;
+              if (levels === 2) {
+                  newPixel = oldPixel < threshold ? 0 : 255;
+              } else {
+                  newPixel = Math.round(oldPixel / step) * step;
+              }
+              
+              gray[i] = newPixel;
+              
+              const quantError = oldPixel - newPixel;
+              
+              // Distribute error to neighbors
+              if (x + 1 < width) 
+                  gray[i + 1] = Math.min(255, Math.max(0, gray[i + 1] + quantError * 7 / 16));
+              if (x - 1 >= 0 && y + 1 < height) 
+                  gray[i + width - 1] = Math.min(255, Math.max(0, gray[i + width - 1] + quantError * 3 / 16));
+              if (y + 1 < height) 
+                  gray[i + width] = Math.min(255, Math.max(0, gray[i + width] + quantError * 5 / 16));
+              if (x + 1 < width && y + 1 < height) 
+                  gray[i + width + 1] = Math.min(255, Math.max(0, gray[i + width + 1] + quantError * 1 / 16));
+          }
+      }
+  },
   
-  mapPixelsToChars(gray, width, height, ignoreWhite, charset, grayOriginal, isEdgeDetection) {
+  mapPixelsToChars(gray, width, height, ignoreWhite, charset, grayOriginal, isEdgeDetection, threshold) {
     // Get gradient string based on charset
     let gradient = this.core.state.cachedGradients[charset];
     if (!gradient) {
@@ -451,7 +516,8 @@ const MediaProcessor = {
     const WHITE_CUTOFF = 250; // Threshold for "pure white" to be transparent/space
     
     // Cache mapping array for this specific configuration
-    const cacheKey = `${charset}_${ignoreWhite}_${nLevels}`;
+    // Include threshold in cache key if binary
+    const cacheKey = `${charset}_${ignoreWhite}_${nLevels}_${threshold}`;
     let charMapping = this.charCache.get(cacheKey);
     
     if (!charMapping) {
@@ -461,7 +527,13 @@ const MediaProcessor = {
           charMapping[i] = ' '; // Transparent/Space
         } else {
           // Map 0-255 to 0-(nLevels-1)
-          const level = Math.min(nLevels - 1, Math.max(0, (i * scaleFactor + 0.5) | 0));
+          let level;
+          if (nLevels === 2) {
+              // Strict binary thresholding
+              level = i < threshold ? 0 : 1;
+          } else {
+              level = Math.min(nLevels - 1, Math.max(0, (i * scaleFactor + 0.5) | 0));
+          }
           charMapping[i] = gradient[level];
         }
       }
@@ -469,13 +541,7 @@ const MediaProcessor = {
     }
     
     // Build the ASCII string
-    // We use a single array join for performance instead of string concatenation
     const result = new Array(height);
-    const sourceGray = isEdgeDetection ? grayOriginal : gray; // Use original for color/intensity if needed, but here we map the processed gray
-    
-    // Actually, if edge detection is ON, 'gray' contains the edges (0 or 255).
-    // If we want to mix edges with original image, logic would be more complex.
-    // For now, we just map the 'gray' buffer which is either the adjusted image or the edge map.
     
     let offset = 0;
     for (let y = 0; y < height; y++) {
@@ -490,10 +556,6 @@ const MediaProcessor = {
   },
   
   applyEdgeDetection(gray, width, height, threshold) {
-    // Simple Sobel operator or similar could go here.
-    // For brevity and performance, using a simplified difference check.
-    // (Reusing the logic from the original file but cleaned up)
-    
     const size = width * height;
     const edges = new Uint8Array(size);
     edges.fill(255); // Default to white (no edge)
