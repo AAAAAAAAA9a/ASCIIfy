@@ -271,7 +271,5 @@ const UIManager = {
     }
   },
 
-  updateFileTypeIndicator(type, details) {
-    // No-op for now as UI handles it
-  },
+  }
 };

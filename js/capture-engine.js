@@ -1,7 +1,7 @@
 const CaptureEngine = {
   core: null,
   state: {
-    // Removed isCapturing, frameCount, etc. as we now process offline
+
     isPreviewPlaying: false,
     previewAnimationFrame: null,
     isProcessing: false, // New flag to prevent concurrent exports

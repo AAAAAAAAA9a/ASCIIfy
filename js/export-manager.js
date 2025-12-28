@@ -1,7 +1,6 @@
 const ExportManager = {
   core: null,
   state: {
-    previewInterval: null,
     isPreviewPlaying: false,
     importedAnimation: null
   },
@@ -12,7 +11,6 @@ const ExportManager = {
   },
   
   setupEventListeners() {
-    document.getElementById('startExport')?.addEventListener('click', () => this.startExportFlow());
     document.getElementById('startExport')?.addEventListener('click', () => this.startExportFlow());
     
     // Import JSON handling
@@ -114,7 +112,7 @@ const ExportManager = {
           this.core.showMessage('Export complete!', 'success');
         }
         
-        // Store frames (not really needed for import flow, but good for state consistency)
+        // Store frames for consistency
         this.core.state.exportFrames = frames;
 
     } catch (err) {
@@ -122,11 +120,7 @@ const ExportManager = {
     }
   },
   
-  resampleFrames(frames, targetFps) {
-      // Deprecated/Not used if we capture at exact FPS.
-      // Keeping it if we ever need to resample existing frames.
-      return frames.map(f => f.content); 
-  },
+
   
   createSingleFileExport(data, format) {
     let content = '';
