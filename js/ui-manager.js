@@ -269,7 +269,5 @@ const UIManager = {
       mainContent.classList.remove("has-video");
       if (playbackControls) playbackControls.style.display = "none";
     }
-  },
-
   }
 };
