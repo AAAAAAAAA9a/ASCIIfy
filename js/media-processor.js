@@ -15,20 +15,12 @@ const MediaProcessor = {
   // =============================================================================
   
   processFile(file) {
-    console.log('Processing file:', file.name, 'Type:', file.type);
-    this.core.cleanupMedia();
-    this.core.state.frames = [];
-    
     // Reset export state
     this.core.state.exportFrames = [];
-    this.core.state.hasExportCapture = false;
     
     // Determine file type and process accordingly
     if (file.type === 'image/gif') {
-      console.log('Processing GIF');
-      this.processGifFile(file);
     } else if (file.type.startsWith('image/')) {
-      console.log('Processing as image');
       this.core.state.currentFileType = 'image';
       
       // Update UI for image mode
@@ -36,7 +28,6 @@ const MediaProcessor = {
       this.processImageFile(file);
       
     } else if (file.type.startsWith('video/') || file.name.match(/\.(mp4|webm|ogg|mov|avi)$/i)) {
-      console.log('Processing as video');
       this.core.state.currentFileType = 'video';
       
       // Update UI for video mode
@@ -44,7 +35,6 @@ const MediaProcessor = {
       this.processVideoFile(file);
       
     } else {
-      console.log('Unsupported file type:', file.type);
       this.core.showMessage('Unsupported file type. Please upload an image or video.', 'error');
       return;
     }
@@ -73,11 +63,6 @@ const MediaProcessor = {
         const GifReader = (window.exports && window.exports.GifReader) || window.GifReader || (window.omggif && window.omggif.GifReader);
         
         if (!GifReader) {
-            console.error('GIF Library Debug:', { 
-              exports: window.exports, 
-              GifReader: window.GifReader,
-              omggif: window.omggif 
-            });
             throw new Error('GIF library not loaded correctly. Please refresh the page.');
         }
 
@@ -342,8 +327,8 @@ const MediaProcessor = {
       this.core.state.frameHeight = asciiHeight;
       
       // Get canvas
-      const canvas = document.getElementById('canvas');
-      if (!canvas) throw new Error('Canvas element not found');
+      const canvas = this.core.state.canvas; // Use centralized centralized canvas
+      if (!canvas) throw new Error('Canvas element not found in core state');
       
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       
@@ -375,7 +360,6 @@ const MediaProcessor = {
       
       return ascii;
     } catch (error) {
-      console.error('Error processing media:', error);
       this.core.showMessage(`Error processing media: ${error.message}`, 'error');
       return '';
     }

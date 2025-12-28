@@ -18,8 +18,8 @@ const ASCIIfy = {
     originalCanvas: document.createElement('canvas'),
     originalCtx: null,
     previewInterval: null,
-    theme: 'dark',
-    hasExportCapture: false,
+    previewInterval: null,
+
 
     // GIF State
     gifFrames: [],
@@ -38,14 +38,15 @@ const ASCIIfy = {
   },
 
   setupCanvases() {
-    this.state.videoCanvas = document.getElementById('videoCanvas') || document.createElement('canvas');
-    if (!this.state.videoCanvas.id) {
-      this.state.videoCanvas.id = 'videoCanvas';
-      this.state.videoCanvas.style.display = 'none';
-      document.body.appendChild(this.state.videoCanvas);
-    }
-    
+    // Video Canvas (for drawing video frames)
+    this.state.videoCanvas = document.createElement('canvas');
+    this.state.videoCanvas.id = 'videoCanvas';
     this.state.videoContext = this.state.videoCanvas.getContext('2d', { willReadFrequently: true });
+
+    // Processing Canvas (for general media processing)
+    this.state.canvas = document.createElement('canvas'); // Replaces #canvas from HTML
+    this.state.canvas.id = 'processingCanvas';
+    
     this.state.tempCtx = this.state.tempCanvas.getContext('2d', { willReadFrequently: true });
     this.state.originalCtx = this.state.originalCanvas.getContext('2d', { willReadFrequently: true });
   },
@@ -120,7 +121,7 @@ const ASCIIfy = {
       this.cleanupMedia();
       this.state.frames = [];
       this.state.exportFrames = [];
-      this.state.hasExportCapture = false;
+      this.state.exportFrames = [];
       this.state.currentMedia = null;
       this.state.currentFileType = null;
       
@@ -246,7 +247,6 @@ const ASCIIfy = {
       MediaProcessor.charCache.clear();
     }
     
-    console.log('Video resources cleaned up successfully');
   },
   
   cleanupMedia() {
