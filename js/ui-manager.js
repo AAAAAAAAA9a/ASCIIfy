@@ -205,10 +205,11 @@ const UIManager = {
 
     clearTimeout(this._updateTimer);
     this._updateTimer = setTimeout(() => {
-      if (this.core.state.currentMedia) {
-        if (this.core.state.currentFileType === "image") {
-          MediaProcessor.processMedia(this.core.state.currentMedia);
-        }
+      if (this.core.state.currentFileType === "image" && this.core.state.currentMedia) {
+        MediaProcessor.processMedia(this.core.state.currentMedia);
+      } else if (this.core.state.currentFileType === "gif" && this.core.state.gifFrames.length > 0) {
+        // Re-render current frame with new settings
+        MediaProcessor.renderGifFrame(this.core.state.currentGifFrameIndex);
       }
     }, 50);
   },
@@ -244,7 +245,7 @@ const UIManager = {
       threshold: parseInt(document.getElementById("threshold").value, 10),
       edgeThreshold: parseInt(document.getElementById("edgeThreshold").value, 10),
       invert: document.getElementById("invert")?.checked || false,
-      ignoreWhite: document.getElementById("ignoreWhite")?.checked || true,
+      ignoreWhite: document.getElementById("ignoreWhite")?.checked ?? true,
       dithering: document.getElementById("dithering")?.checked || false,
       edgeDetection:
         document.getElementById("enableEdgeDetection")?.checked || false,
