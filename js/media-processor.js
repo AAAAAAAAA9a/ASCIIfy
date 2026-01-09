@@ -20,6 +20,9 @@ const MediaProcessor = {
     
     // Determine file type and process accordingly
     if (file.type === 'image/gif') {
+      this.core.state.currentFileType = 'gif';
+      this.processGifFile(file);
+
     } else if (file.type.startsWith('image/')) {
       this.core.state.currentFileType = 'image';
       
