@@ -9,13 +9,6 @@ const UIManager = {
   },
 
   setupAutomaticZoom() {
-    const screenWidth = window.innerWidth;
-    const mainContent = document.querySelector(".main-content");
-    // Adjusted for new sidebar width (320px)
-    const availableWidth = mainContent
-      ? mainContent.offsetWidth
-      : screenWidth - 320;
-
     const zoomInput = document.getElementById("zoom");
     if (zoomInput) {
       const initialZoom = 100;
@@ -41,7 +34,6 @@ const UIManager = {
   applyZoom(zoomPercent) {
     const asciiArt = document.getElementById("ascii-art");
     if (asciiArt) {
-      // Base font size for 100% zoom
       const baseFontSize = 8;
       const newFontSize = (baseFontSize * zoomPercent) / 100;
       asciiArt.style.fontSize = newFontSize + "px";
@@ -63,11 +55,11 @@ const UIManager = {
     }
 
     if (dropZone && fileInput) {
-      // Handle click on the browse button inside drop zone
       const browseBtn = dropZone.querySelector("button");
       if (browseBtn) {
         browseBtn.addEventListener("click", (e) => {
-          e.stopPropagation(); // Prevent double trigger if parent has listener
+          // Stop the outer click handler from firing twice.
+          e.stopPropagation();
           fileInput.click();
         });
       }
@@ -139,7 +131,6 @@ const UIManager = {
       .getElementById("clearWorkspace")
       ?.addEventListener("click", () => this.core.clearWorkspace());
 
-    // Playback Controls
     const playPauseBtn = document.getElementById('playPauseButton');
     if (playPauseBtn) {
       playPauseBtn.addEventListener('click', () => {
@@ -152,9 +143,6 @@ const UIManager = {
         }
       });
     }
-
-    // Export buttons
-
   },
 
   updateSettings() {
@@ -183,7 +171,6 @@ const UIManager = {
       if (this.core.state.currentFileType === "image" && this.core.state.currentMedia) {
         MediaProcessor.processMedia(this.core.state.currentMedia);
       } else if (this.core.state.currentFileType === "gif" && this.core.state.gifFrames.length > 0) {
-        // Re-render current frame with new settings
         MediaProcessor.renderGifFrame(this.core.state.currentGifFrameIndex);
       } else if (this.core.state.currentFileType === "video" && this.core.state.video) {
         MediaProcessor.updateVideoCanvasSize();

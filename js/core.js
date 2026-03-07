@@ -2,10 +2,10 @@ const ASCIIfy = {
   state: {
     currentMedia: null,
     video: null,
+    canvas: null,
     videoCanvas: null,
     videoContext: null,
     isPlaying: false,
-    isPreviewPlaying: false,
     currentFileType: null,
     frames: [],
     exportFrames: [],
@@ -13,14 +13,8 @@ const ASCIIfy = {
     frameHeight: 0,
     maxProcessingWidth: 500,
     cachedGradients: {},
-    tempCanvas: document.createElement('canvas'),
-    tempCtx: null,
-    originalCanvas: document.createElement('canvas'),
-    originalCtx: null,
-    previewInterval: null,
-
-
-    // GIF State
+    videoObjectURL: null,
+    gifCanvas: null,
     gifFrames: [],
     currentGifFrameIndex: 0,
     isGifPlaying: false,
@@ -37,17 +31,12 @@ const ASCIIfy = {
   },
 
   setupCanvases() {
-    // Video Canvas (for drawing video frames)
     this.state.videoCanvas = document.createElement('canvas');
     this.state.videoCanvas.id = 'videoCanvas';
     this.state.videoContext = this.state.videoCanvas.getContext('2d', { willReadFrequently: true });
 
-    // Processing Canvas (for general media processing)
-    this.state.canvas = document.createElement('canvas'); // Replaces #canvas from HTML
+    this.state.canvas = document.createElement('canvas');
     this.state.canvas.id = 'processingCanvas';
-    
-    this.state.tempCtx = this.state.tempCanvas.getContext('2d', { willReadFrequently: true });
-    this.state.originalCtx = this.state.originalCanvas.getContext('2d', { willReadFrequently: true });
   },
   
   setupNotifications() {
@@ -55,17 +44,14 @@ const ASCIIfy = {
       const notificationArea = document.getElementById('notificationArea');
       if (!notificationArea) return;
       
-      // Clear existing content
       notificationArea.innerHTML = '';
       
-      // Add spinner if requested
       if (showSpinner) {
         const spinner = document.createElement('div');
         spinner.className = 'loading-spinner';
         notificationArea.appendChild(spinner);
       }
       
-      // Add message text
       const messageText = document.createElement('span');
       messageText.textContent = message;
       notificationArea.appendChild(messageText);
@@ -106,11 +92,7 @@ const ASCIIfy = {
       if (this.state.isPlaying && CaptureEngine) {
         CaptureEngine.stopCapture();
       }
-      
-      if (this.state.isPreviewPlaying && CaptureEngine) {
-        CaptureEngine.stopPreview();
-      }
-      
+
       if (ExportManager && ExportManager.state.isPreviewPlaying) {
         ExportManager.stopPreview();
       }
@@ -123,9 +105,8 @@ const ASCIIfy = {
       this.state.currentMedia = null;
       this.state.currentFileType = null;
       
-      // Clear GIF State
       if (this.state.gifInterval) {
-        clearInterval(this.state.gifInterval);
+        clearTimeout(this.state.gifInterval);
         this.state.gifInterval = null;
       }
       this.state.gifFrames = [];
@@ -135,13 +116,10 @@ const ASCIIfy = {
       document.getElementById('ascii-art').textContent = "";
       this.updateStatusMessage("Workspace cleared. Please upload an image or video to begin.");
       
-      // Reset UI State
       UIManager.toggleContentState(false);
       
       document.getElementById('startExport').disabled = true;
-      
 
-      
       if (ExportManager) {
         ExportManager.clearPreview();
       }
@@ -167,26 +145,20 @@ const ASCIIfy = {
         }
         
         this.state.isPlaying = false;
-        this.state.isPreviewPlaying = false;
       } catch (err) {
         console.warn('Error during video element cleanup:', err);
       } finally {
         this.state.video = null;
       }
     }
-    
-    if (this.state.animationFrame) {
-      cancelAnimationFrame(this.state.animationFrame);
-      this.state.animationFrame = null;
-    }
-    
+
     if (CaptureEngine && CaptureEngine.state.previewAnimationFrame) {
       cancelAnimationFrame(CaptureEngine.state.previewAnimationFrame);
       CaptureEngine.state.previewAnimationFrame = null;
     }
     
     if (ExportManager && ExportManager.state.previewInterval) {
-      clearInterval(ExportManager.state.previewInterval);
+      clearTimeout(ExportManager.state.previewInterval);
       ExportManager.state.previewInterval = null;
     }
     
@@ -200,9 +172,9 @@ const ASCIIfy = {
     }
     
     const canvasesToClear = [
+      { ctx: this.state.canvas?.getContext('2d'), canvas: this.state.canvas },
       { ctx: this.state.videoContext, canvas: this.state.videoCanvas },
-      { ctx: this.state.tempCtx, canvas: this.state.tempCanvas },
-      { ctx: this.state.originalCtx, canvas: this.state.originalCanvas }
+      { ctx: this.state.gifCanvas?.getContext('2d'), canvas: this.state.gifCanvas }
     ];
     
     canvasesToClear.forEach(item => {
@@ -216,9 +188,6 @@ const ASCIIfy = {
     });
     
     if (CaptureEngine) {
-      if (CaptureEngine.state.isCapturing) {
-        CaptureEngine.stopCapture();
-      }
       if (CaptureEngine.state.isPreviewPlaying) {
         CaptureEngine.stopPreview();
       }
@@ -227,15 +196,7 @@ const ASCIIfy = {
     if (ExportManager && ExportManager.state.isPreviewPlaying) {
       ExportManager.stopPreview();
     }
-    
-    const timeoutsToCancel = ['_cleanupTimeout', '_processingTimeout', '_previewTimeout'];
-    timeoutsToCancel.forEach(timeoutName => {
-      if (this[timeoutName]) {
-        clearTimeout(this[timeoutName]);
-        this[timeoutName] = null;
-      }
-    });
-    
+
     const videoControls = document.getElementById('playbackControls');
     if (videoControls) {
       videoControls.style.display = 'none';
@@ -246,7 +207,6 @@ const ASCIIfy = {
     if (MediaProcessor && MediaProcessor.charCache) {
       MediaProcessor.charCache.clear();
     }
-    
   },
   
   cleanupMedia() {

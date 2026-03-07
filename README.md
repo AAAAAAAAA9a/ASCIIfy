@@ -42,4 +42,4 @@ For videos, the floating controls handle preview playback. For GIFs, the same ar
 ## Notes
 
 - Everything runs client-side in the browser.
-- The page uses CDN-hosted libraries for ZIP, GIF, and PDF-related browser support.
+- The page uses CDN-hosted libraries for ZIP and GIF support.

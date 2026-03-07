@@ -1,10 +1,9 @@
 const CaptureEngine = {
   core: null,
   state: {
-
     isPreviewPlaying: false,
     previewAnimationFrame: null,
-    isProcessing: false, // New flag to prevent concurrent exports
+    isProcessing: false,
   },
 
   init(coreModule) {
@@ -13,7 +12,6 @@ const CaptureEngine = {
   },
 
   setupEventListeners() {
-    // Only playback controls here. Capture is now part of Export.
     document
       .getElementById("playPauseButton")
       ?.addEventListener("click", () => this.togglePlayback());
@@ -60,11 +58,9 @@ const CaptureEngine = {
     if (!btn) return;
 
     if (isPlaying) {
-      // Pause Icon
       btn.innerHTML =
         '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
     } else {
-      // Play Icon
       btn.innerHTML =
         '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
     }
@@ -78,15 +74,12 @@ const CaptureEngine = {
       if (!this.state.isPreviewPlaying) return;
 
       if (this.core.state.video && !this.core.state.video.paused) {
-        // Draw video frame to canvas
         const video = this.core.state.video;
         const canvas = this.core.state.videoCanvas;
         const ctx = this.core.state.videoContext;
 
         if (video.videoWidth > 0 && canvas.width > 0) {
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-          // Process frame
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const ascii = MediaProcessor.processFrame(imageData);
           const output = document.getElementById("ascii-art");
@@ -137,10 +130,6 @@ const CaptureEngine = {
     this.updatePlaybackInfo();
   },
 
-  // =========================================================================
-  // OFFLINE PROCESSING (NEW)
-  // =========================================================================
-
   async processVideo(targetFps, updateProgressCallback) {
     if (this.state.isProcessing) return;
     this.state.isProcessing = true;
@@ -155,16 +144,13 @@ const CaptureEngine = {
     const frames = [];
     const totalFrames = Math.max(1, Math.floor(duration * targetFps));
 
-    // Pause playback during processing
-    const wasPlaying = !video.paused;
-    if (wasPlaying) video.pause();
+    if (!video.paused) video.pause();
     this.stopPreview();
 
     try {
       for (let i = 0; i < totalFrames; i++) {
         const time = i * interval;
 
-        // Wait for seek to complete
         await new Promise((resolve) => {
           if (Math.abs(video.currentTime - time) < 0.001) {
             resolve();
@@ -179,13 +165,11 @@ const CaptureEngine = {
           video.currentTime = time;
         });
 
-        // Capture frame
         const canvas = this.core.state.videoCanvas;
         const ctx = this.core.state.videoContext;
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-        // Convert to ASCII (using current settings)
         const ascii = MediaProcessor.processFrame(imageData);
 
         frames.push({
@@ -197,7 +181,6 @@ const CaptureEngine = {
           updateProgressCallback(Math.round((i / totalFrames) * 100));
         }
 
-        // Small delay to keep UI responsive
         if (i % 5 === 0) await new Promise((r) => setTimeout(r, 0));
       }
 
@@ -206,25 +189,18 @@ const CaptureEngine = {
       }
     } finally {
       this.state.isProcessing = false;
-      // Restore state mechanism if needed, or leave paused
-      if (wasPlaying) {
-        // Optional: Resume playback? Usually better to leave paused after export.
-        // this.togglePlayback();
-      }
     }
 
     return frames;
   },
 
   async processGif(targetFps, updateProgressCallback) {
-    // Gif frames are already decoded in core.state.gifFrames
-    // We just need to convert them to ASCII using current settings
     const rawFrames = this.core.state.gifFrames;
     if (!rawFrames || rawFrames.length === 0)
       throw new Error("No GIF frames loaded");
 
     const processedFrames = [];
-    const settings = UIManager.getSettings(); // Ensure we use latest settings
+    const settings = UIManager.getSettings();
     const frameCache = new Array(rawFrames.length);
     const frameStartTimes = [];
     let totalDuration = 0;
