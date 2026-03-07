@@ -9,12 +9,35 @@ const MediaProcessor = {
     this.core = coreModule;
     this.loadDefaultImage();
   },
+
+  updateVideoCanvasSize() {
+    const video = this.core?.state?.video;
+    const canvas = this.core?.state?.videoCanvas;
+    if (!video || !canvas || !video.videoWidth || !video.videoHeight) return;
+
+    const settings = UIManager.getSettings();
+    const fontAspectRatio = 0.55;
+    const asciiWidth = Math.min(settings.width, this.core.state.maxProcessingWidth);
+    const asciiHeight = Math.round((video.videoHeight / video.videoWidth) * asciiWidth * fontAspectRatio);
+
+    if (canvas.width !== asciiWidth) canvas.width = asciiWidth;
+    if (canvas.height !== asciiHeight) canvas.height = asciiHeight;
+
+    this.core.state.frameWidth = asciiWidth;
+    this.core.state.frameHeight = asciiHeight;
+  },
   
   // =============================================================================
   // FILE PROCESSING ENTRY POINT
   // =============================================================================
   
   processFile(file) {
+    this.core.cleanupMedia();
+    this.pauseGif();
+    this.core.state.gifFrames = [];
+    this.core.state.currentGifFrameIndex = 0;
+    this.core.state.currentMedia = null;
+
     // Reset export state
     this.core.state.exportFrames = [];
     
@@ -97,6 +120,7 @@ const MediaProcessor = {
         }
         this.core.state.gifCanvas.width = width;
         this.core.state.gifCanvas.height = height;
+        this.core.state.currentMedia = this.core.state.gifCanvas;
         
         this.core.showMessage(`GIF loaded: ${frames.length} frames`, 'success');
         
@@ -114,6 +138,10 @@ const MediaProcessor = {
 
   playGif() {
     if (this.core.state.gifFrames.length === 0) return;
+
+    if (this.core.state.currentGifFrameIndex >= this.core.state.gifFrames.length - 1) {
+      this.core.state.currentGifFrameIndex = 0;
+    }
     
     this.core.state.isGifPlaying = true;
     this.updatePlayPauseIcon(true);
@@ -158,6 +186,7 @@ const MediaProcessor = {
     if (nextIndex >= this.core.state.gifFrames.length) {
         if (!shouldLoop) {
             this.pauseGif();
+            this.core.state.currentGifFrameIndex = this.core.state.gifFrames.length - 1;
             return;
         }
         nextIndex = 0;
@@ -171,9 +200,11 @@ const MediaProcessor = {
   },
 
   renderGifFrame(index) {
+      if (!this.core.state.gifFrames[index]) return;
       const frame = this.core.state.gifFrames[index];
       const ctx = this.core.state.gifCanvas.getContext('2d');
       ctx.putImageData(frame.data, 0, 0);
+      this.core.state.currentMedia = this.core.state.gifCanvas;
       this.processMedia(this.core.state.gifCanvas);
   },
 
@@ -249,19 +280,9 @@ const MediaProcessor = {
         return;
       }
       
-      // Optimize canvas size for performance
-      const maxWidth = this.core.state.maxProcessingWidth;
-      const aspectRatio = video.videoHeight / video.videoWidth;
-      const optimizedWidth = Math.min(video.videoWidth, maxWidth);
-      const optimizedHeight = Math.round(optimizedWidth * aspectRatio);
-      
-      if (this.core.state.videoCanvas) {
-        this.core.state.videoCanvas.width = optimizedWidth;
-        this.core.state.videoCanvas.height = optimizedHeight;
-      }
-      
       this.core.state.video = video;
       this.core.state.currentMedia = video;
+      this.updateVideoCanvasSize();
       
       this.core.showMessage('Video loaded. Live preview starting...', 'success');
       
@@ -275,6 +296,15 @@ const MediaProcessor = {
         setTimeout(() => {
           CaptureEngine.startPreview();
         }, 300);
+      }
+    });
+
+    video.addEventListener('ended', () => {
+      this.core.state.isPlaying = false;
+
+      if (CaptureEngine) {
+        CaptureEngine.stopPreview();
+        CaptureEngine.updatePlayButton(false);
       }
     });
     

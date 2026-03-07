@@ -29,10 +29,16 @@ const CaptureEngine = {
   },
 
   togglePlayback() {
+    if (this.core.state.currentFileType !== "video") return;
+
     const video = this.core.state.video;
     if (!video) return;
 
     if (video.paused) {
+      if (video.ended || video.currentTime >= video.duration) {
+        video.currentTime = 0;
+      }
+
       video
         .play()
         .then(() => {
@@ -82,7 +88,11 @@ const CaptureEngine = {
 
           // Process frame
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          MediaProcessor.processFrame(imageData);
+          const ascii = MediaProcessor.processFrame(imageData);
+          const output = document.getElementById("ascii-art");
+          if (output) output.textContent = ascii;
+          this.core.state.frameWidth = imageData.width;
+          this.core.state.frameHeight = imageData.height;
 
           this.updatePlaybackInfo();
         }
@@ -100,6 +110,17 @@ const CaptureEngine = {
       cancelAnimationFrame(this.state.previewAnimationFrame);
       this.state.previewAnimationFrame = null;
     }
+  },
+
+  stopCapture() {
+    const video = this.core.state.video;
+    if (video) {
+      video.pause();
+      this.core.state.isPlaying = false;
+    }
+
+    this.stopPreview();
+    this.updatePlayButton(false);
   },
 
   updatePlaybackInfo() {
@@ -127,10 +148,12 @@ const CaptureEngine = {
     const video = this.core.state.video;
     if (!video) throw new Error("No video loaded");
 
+    MediaProcessor.updateVideoCanvasSize();
+
     const duration = video.duration;
     const interval = 1 / targetFps;
     const frames = [];
-    const totalFrames = Math.floor(duration * targetFps);
+    const totalFrames = Math.max(1, Math.floor(duration * targetFps));
 
     // Pause playback during processing
     const wasPlaying = !video.paused;
@@ -140,15 +163,20 @@ const CaptureEngine = {
     try {
       for (let i = 0; i < totalFrames; i++) {
         const time = i * interval;
-        video.currentTime = time;
 
         // Wait for seek to complete
         await new Promise((resolve) => {
+          if (Math.abs(video.currentTime - time) < 0.001) {
+            resolve();
+            return;
+          }
+
           const onSeek = () => {
             video.removeEventListener("seeked", onSeek);
             resolve();
           };
           video.addEventListener("seeked", onSeek);
+          video.currentTime = time;
         });
 
         // Capture frame
@@ -172,6 +200,10 @@ const CaptureEngine = {
         // Small delay to keep UI responsive
         if (i % 5 === 0) await new Promise((r) => setTimeout(r, 0));
       }
+
+      if (updateProgressCallback) {
+        updateProgressCallback(100);
+      }
     } finally {
       this.state.isProcessing = false;
       // Restore state mechanism if needed, or leave paused
@@ -184,7 +216,7 @@ const CaptureEngine = {
     return frames;
   },
 
-  async processGif(updateProgressCallback) {
+  async processGif(targetFps, updateProgressCallback) {
     // Gif frames are already decoded in core.state.gifFrames
     // We just need to convert them to ASCII using current settings
     const rawFrames = this.core.state.gifFrames;
@@ -193,25 +225,50 @@ const CaptureEngine = {
 
     const processedFrames = [];
     const settings = UIManager.getSettings(); // Ensure we use latest settings
+    const frameCache = new Array(rawFrames.length);
+    const frameStartTimes = [];
+    let totalDuration = 0;
 
-    // We need a canvas to putImageData to then getImageData back (or just pass wrapper)
-    // MediaProcessor.convertToAscii takes imageData directly, so we can skip canvas draw!
-    // Wait, MediaProcessor.convertToAscii splits logic. `processFrame` calls it.
+    for (const frame of rawFrames) {
+      frameStartTimes.push(totalDuration);
+      totalDuration += frame.delay;
+    }
 
-    for (let i = 0; i < rawFrames.length; i++) {
-      const frame = rawFrames[i];
-      const ascii = MediaProcessor.convertToAscii(frame.data, settings);
+    const interval = 1000 / targetFps;
+    const totalFrames = Math.max(1, Math.ceil(totalDuration / interval));
+    let sourceIndex = 0;
+
+    for (let i = 0; i < totalFrames; i++) {
+      const timestamp = Math.min(i * interval, Math.max(0, totalDuration - 1));
+
+      while (
+        sourceIndex + 1 < rawFrames.length &&
+        frameStartTimes[sourceIndex + 1] <= timestamp
+      ) {
+        sourceIndex++;
+      }
+
+      if (!frameCache[sourceIndex]) {
+        frameCache[sourceIndex] = MediaProcessor.convertToAscii(
+          rawFrames[sourceIndex].data,
+          settings
+        );
+      }
 
       processedFrames.push({
-        timestamp: i * frame.delay, // Approximate timestamp
-        content: ascii,
+        timestamp: Math.round(timestamp),
+        content: frameCache[sourceIndex],
       });
 
       if (updateProgressCallback) {
-        updateProgressCallback(Math.round((i / rawFrames.length) * 100));
+        updateProgressCallback(Math.round((i / totalFrames) * 100));
       }
 
       if (i % 10 === 0) await new Promise((r) => setTimeout(r, 0));
+    }
+
+    if (updateProgressCallback) {
+      updateProgressCallback(100);
     }
 
     return processedFrames;

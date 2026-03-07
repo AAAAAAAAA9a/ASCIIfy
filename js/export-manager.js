@@ -2,7 +2,8 @@ const ExportManager = {
   core: null,
   state: {
     isPreviewPlaying: false,
-    importedAnimation: null
+    importedAnimation: null,
+    previewInterval: null
   },
   
   init(coreModule) {
@@ -56,7 +57,7 @@ const ExportManager = {
         if (this.core.state.currentFileType === 'video') {
             frames = await CaptureEngine.processVideo(fps, onProgress);
         } else if (this.core.state.currentFileType === 'gif') {
-            frames = await CaptureEngine.processGif(onProgress);
+            frames = await CaptureEngine.processGif(fps, onProgress);
         } else if (this.core.state.currentFileType === 'image') {
             // Single frame export
              const ascii = document.getElementById('ascii-art').textContent;
@@ -72,7 +73,7 @@ const ExportManager = {
         // Add small delay to let UI render text update
         await new Promise(r => setTimeout(r, 50));
         
-        this.finalizeExport(fps, format, frames, mode);
+        await this.finalizeExport(fps, format, frames, mode);
         
     } catch (err) {
         console.error('Export Error:', err);
@@ -83,7 +84,7 @@ const ExportManager = {
     }
   },
   
-  finalizeExport(targetFps, format, frames, mode) {
+  async finalizeExport(targetFps, format, frames, mode) {
     try {
         // Frames are already processed at target FPS (for video) or native FPS (for gif)
         // If GIF native FPS != Target FPS, we might simply accept the native frames 
@@ -101,12 +102,12 @@ const ExportManager = {
           frames: frames
         };
         
-        if (format === 'jpg') {
-           if (mode === 'separate') {
-             this.createZipExport(frames, exportData, 'jpg');
-           } else {
-             this.createImageExport(frames, exportData, 'jpg', Date.now());
-           }
+        if (mode === 'separate') {
+          await this.createZipExport(frames, exportData.metadata, format);
+          this.core.showMessage('Export complete!', 'success');
+        } else if (format === 'jpg') {
+          await this.createImageExport(frames, exportData, 'jpg', Date.now());
+          this.core.showMessage('Export complete!', 'success');
         } else {
           this.createSingleFileExport(exportData, format);
           this.core.showMessage('Export complete!', 'success');
@@ -145,66 +146,89 @@ const ExportManager = {
     URL.revokeObjectURL(url);
   },
   
-  createZipExport(frames, metadata, format) {
+  async createZipExport(frames, metadata, format) {
+    if (typeof JSZip === 'undefined') {
+      throw new Error('JSZip is not loaded.');
+    }
+
     const zip = new JSZip();
     const folder = zip.folder("frames");
     
     zip.file("metadata.json", JSON.stringify(metadata, null, 2));
     
-    frames.forEach((frame, index) => {
+    for (let index = 0; index < frames.length; index++) {
+      const frame = frames[index];
       const paddedIndex = String(index).padStart(4, '0');
       const frameContent = frame.content;
       
       if (format === 'jpg') {
-        // Would need async canvas rendering here.
-        // For now, save as text with warning or implement simple sync canvas
-        folder.file(`frame_${paddedIndex}.txt`, frameContent); 
+        const blob = await this.createAsciiImageBlob(frameContent);
+        folder.file(`frame_${paddedIndex}.jpg`, blob);
       } else {
         folder.file(`frame_${paddedIndex}.${format === 'json' ? 'json' : 'txt'}`, 
           format === 'json' ? JSON.stringify({ content: frameContent, timestamp: frame.timestamp }) : frameContent);
       }
-    });
+    }
     
-    zip.generateAsync({ type: "blob" }).then((content) => {
-      const url = URL.createObjectURL(content);
-      this.downloadFile(url, "ascii-frames.zip");
-      URL.revokeObjectURL(url);
-    });
+    const content = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(content);
+    this.downloadFile(url, "ascii-frames.zip");
+    URL.revokeObjectURL(url);
+  },
+
+  clearPreview() {
+    this.stopPreview();
+    this.state.importedAnimation = null;
   },
   
-  createImageExport(frames, metadata, format, timestamp) {
+  async createImageExport(frames, metadata, format, timestamp) {
     const asciiText = frames[frames.length - 1].content; 
+    const blob = await this.createAsciiImageBlob(asciiText);
+    const url = URL.createObjectURL(blob);
+    this.downloadFile(url, `ascii-export-${timestamp}.jpg`);
+    URL.revokeObjectURL(url);
+  },
+
+  createAsciiImageBlob(asciiText) {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Unable to create canvas context for JPEG export.'));
+        return;
+      }
     
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    const lines = asciiText.split('\n');
-    const fontSize = 12;
-    const lineHeight = 12;
-    ctx.font = `${fontSize}px 'Courier New', monospace`;
-    
-    const width = ctx.measureText(lines[0]).width + 40; 
-    const height = (lines.length * lineHeight) + 40;
-    
-    canvas.width = width;
-    canvas.height = height;
-    
-    ctx.fillStyle = '#0f0f0f'; 
-    ctx.fillRect(0, 0, width, height);
-    
-    ctx.font = `${fontSize}px 'Courier New', monospace`;
-    ctx.fillStyle = '#e8e8e8'; 
-    ctx.textBaseline = 'top';
-    
-    lines.forEach((line, i) => {
-      ctx.fillText(line, 20, 20 + (i * lineHeight));
+      const lines = asciiText.split('\n');
+      const fontSize = 12;
+      const lineHeight = 12;
+      ctx.font = `${fontSize}px 'Courier New', monospace`;
+      
+      const width = ctx.measureText(lines[0] || '').width + 40; 
+      const height = (lines.length * lineHeight) + 40;
+      
+      canvas.width = width;
+      canvas.height = height;
+      
+      ctx.fillStyle = '#0f0f0f'; 
+      ctx.fillRect(0, 0, width, height);
+      
+      ctx.font = `${fontSize}px 'Courier New', monospace`;
+      ctx.fillStyle = '#e8e8e8'; 
+      ctx.textBaseline = 'top';
+      
+      lines.forEach((line, i) => {
+        ctx.fillText(line, 20, 20 + (i * lineHeight));
+      });
+      
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error('Failed to generate JPEG export.'));
+          return;
+        }
+
+        resolve(blob);
+      }, 'image/jpeg', 0.9);
     });
-    
-    canvas.toBlob((blob) => {
-      const url = URL.createObjectURL(blob);
-      this.downloadFile(url, `ascii-export-${timestamp}.jpg`);
-      URL.revokeObjectURL(url);
-    }, 'image/jpeg', 0.9);
   },
   
   downloadFile(url, filename) {
@@ -221,6 +245,7 @@ const ExportManager = {
     if (!file) return;
     
     try {
+        this.core.cleanupMedia();
         const text = await file.text();
         const data = JSON.parse(text);
         
@@ -230,6 +255,10 @@ const ExportManager = {
         
         // Load frames into state
         this.core.state.exportFrames = data.frames;
+        this.core.state.currentFileType = 'imported';
+        this.core.state.currentMedia = null;
+        const startExportBtn = document.getElementById('startExport');
+        if (startExportBtn) startExportBtn.disabled = true;
         
         // Update FPS setting if available in metadata
         if (data.metadata && data.metadata.fps) {
@@ -240,7 +269,7 @@ const ExportManager = {
         this.core.showMessage(`Imported ${data.frames.length} frames. Playing...`, 'success');
         
         // Show content and controls (treat as video playback)
-        UIManager.toggleContentState(true, true);
+        UIManager.toggleContentState(true, false);
         
         // Start playback
         this.startPreview();
@@ -267,10 +296,10 @@ const ExportManager = {
     if (stopBtn) stopBtn.disabled = false;
     
     const fps = parseInt(document.getElementById('exportFPS').value) || 30;
-    const interval = 1000 / fps;
+    const fallbackDelay = 1000 / fps;
     let frameIndex = 0;
-    
-    this.state.previewInterval = setInterval(() => {
+
+    const renderFrame = () => {
       if (!this.state.isPreviewPlaying) return; 
 
       if (frameIndex >= frames.length) {
@@ -285,8 +314,24 @@ const ExportManager = {
       
       const frameContent = frames[frameIndex].content || frames[frameIndex]; // Handle object or potential raw string
       document.getElementById('ascii-art').textContent = frameContent;
+      const currentFrame = frames[frameIndex];
       frameIndex++;
-    }, interval);
+      
+      let nextDelay = fallbackDelay;
+      const nextFrame = frames[frameIndex];
+      if (
+        currentFrame &&
+        nextFrame &&
+        typeof currentFrame.timestamp === 'number' &&
+        typeof nextFrame.timestamp === 'number'
+      ) {
+        nextDelay = Math.max(1, nextFrame.timestamp - currentFrame.timestamp);
+      }
+
+      this.state.previewInterval = setTimeout(renderFrame, nextDelay);
+    };
+
+    renderFrame();
   },
   
   stopPreview() {

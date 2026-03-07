@@ -124,20 +124,12 @@ const UIManager = {
 
     const edgeToggle = document.getElementById("enableEdgeDetection");
     if (edgeToggle) {
-      edgeToggle.addEventListener("change", () => {
-        if (this.core.state.currentMedia) {
-          MediaProcessor.processMedia(this.core.state.currentMedia);
-        }
-      });
+      edgeToggle.addEventListener("change", () => this.updateSettings());
     }
 
     const charsetSelect = document.getElementById("charset");
     if (charsetSelect) {
-      charsetSelect.addEventListener("change", () => {
-        if (this.core.state.currentMedia) {
-          MediaProcessor.processMedia(this.core.state.currentMedia);
-        }
-      });
+      charsetSelect.addEventListener("change", () => this.updateSettings());
     }
 
     document
@@ -151,24 +143,7 @@ const UIManager = {
     const playPauseBtn = document.getElementById('playPauseButton');
     if (playPauseBtn) {
       playPauseBtn.addEventListener('click', () => {
-        if (this.core.state.currentFileType === 'video') {
-          const video = this.core.state.video;
-          if (video) {
-            if (video.paused) {
-              video.play();
-              this.core.state.isPlaying = true;
-            } else {
-              video.pause();
-              this.core.state.isPlaying = false;
-            }
-            // Icon update handled by CaptureEngine loop or we can force it here
-            // But for now let's rely on the existing loop or add a helper
-            const isPlaying = !video.paused;
-            playPauseBtn.innerHTML = isPlaying 
-              ? `<svg class="pause-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`
-              : `<svg class="play-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
-          }
-        } else if (this.core.state.currentFileType === 'gif') {
+        if (this.core.state.currentFileType === 'gif') {
           if (this.core.state.isGifPlaying) {
             MediaProcessor.pauseGif();
           } else {
@@ -210,6 +185,12 @@ const UIManager = {
       } else if (this.core.state.currentFileType === "gif" && this.core.state.gifFrames.length > 0) {
         // Re-render current frame with new settings
         MediaProcessor.renderGifFrame(this.core.state.currentGifFrameIndex);
+      } else if (this.core.state.currentFileType === "video" && this.core.state.video) {
+        MediaProcessor.updateVideoCanvasSize();
+
+        if (this.core.state.video.paused) {
+          MediaProcessor.processMedia(this.core.state.video);
+        }
       }
     }, 50);
   },

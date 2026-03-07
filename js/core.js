@@ -18,7 +18,6 @@ const ASCIIfy = {
     originalCanvas: document.createElement('canvas'),
     originalCtx: null,
     previewInterval: null,
-    previewInterval: null,
 
 
     // GIF State
@@ -121,7 +120,6 @@ const ASCIIfy = {
       this.cleanupMedia();
       this.state.frames = [];
       this.state.exportFrames = [];
-      this.state.exportFrames = [];
       this.state.currentMedia = null;
       this.state.currentFileType = null;
       
@@ -172,6 +170,8 @@ const ASCIIfy = {
         this.state.isPreviewPlaying = false;
       } catch (err) {
         console.warn('Error during video element cleanup:', err);
+      } finally {
+        this.state.video = null;
       }
     }
     
@@ -186,7 +186,7 @@ const ASCIIfy = {
     }
     
     if (ExportManager && ExportManager.state.previewInterval) {
-      cancelAnimationFrame(ExportManager.state.previewInterval);
+      clearInterval(ExportManager.state.previewInterval);
       ExportManager.state.previewInterval = null;
     }
     
